@@ -27,13 +27,13 @@ pause
 
 # --- Step 1: WSL ---
 Write-Host "=== Step 1: Install WSL + $WSL_DISTRO ===" -ForegroundColor Cyan
-$wslStatus = wsl --status 2>&1
-if ($wslStatus -match "not installed" -or $wslStatus -match "no installed") {
+$distroInstalled = wsl --list 2>&1 | Select-String $WSL_DISTRO
+if (-not $distroInstalled) {
     wsl --install -d $WSL_DISTRO
-    Write-Host "WSL installed. Please reboot, create your WSL user, then re-run." -ForegroundColor Yellow
+    Write-Host "Ubuntu installed. Please reboot, create your Linux user (e.g. linuxuser), then re-run." -ForegroundColor Yellow
     exit
 } else {
-    Write-Host "WSL already installed, skipping." -ForegroundColor Green
+    Write-Host "$WSL_DISTRO already installed, skipping." -ForegroundColor Green
 }
 
 # --- Step 2: OpenSSH ---
