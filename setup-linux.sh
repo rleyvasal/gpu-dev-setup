@@ -40,19 +40,20 @@ sudo apt-get install -qy openssh-server curl wget ufw
 
 # --- Step 2: Configure SSH ---
 echo "=== Step 2: Configuring SSH on port $WSL_SSH_PORT ==="
-sudo sed -i "s/#\?Port 22/Port $WSL_SSH_PORT/" /etc/ssh/sshd_config
+sudo sed -i -E "s/^#?Port [0-9]+/Port $WSL_SSH_PORT/" /etc/ssh/sshd_config
 sudo sed -i -E "s/#?(PubkeyAuthentication).*/\1 yes/" /etc/ssh/sshd_config
 sudo sed -i -E "s/#?(PasswordAuthentication).*/\1 no/" /etc/ssh/sshd_config
+sudo mkdir -p /run/sshd
 sudo systemctl enable ssh
 sudo systemctl restart ssh
 
 # --- Step 3: SSH keys ---
 echo "=== Step 3: Adding SSH keys ==="
-mkdir -p /home/$WSL_USER/.ssh
-grep -qxF "$SOLVEIT_KEY" /home/$WSL_USER/.ssh/authorized_keys 2>/dev/null \
-    || echo "$SOLVEIT_KEY" >> /home/$WSL_USER/.ssh/authorized_keys
-chmod 700 /home/$WSL_USER/.ssh
-chmod 600 /home/$WSL_USER/.ssh/authorized_keys
+mkdir -p /home/${WSL_USER}/.ssh
+grep -qxF "$SOLVEIT_KEY" /home/${WSL_USER}/.ssh/authorized_keys 2>/dev/null \
+    || echo "$SOLVEIT_KEY" >> /home/${WSL_USER}/.ssh/authorized_keys
+chmod 700 /home/${WSL_USER}/.ssh
+chmod 600 /home/${WSL_USER}/.ssh/authorized_keys
 
 # --- Step 4: Firewall ---
 echo "=== Step 4: Configuring firewall ==="
@@ -77,7 +78,7 @@ if ! command -v uv &> /dev/null; then
     curl -LsSf https://astral.sh/uv/install.sh | sh
     source $HOME/.local/bin/env 2>/dev/null || source $HOME/.cargo/env 2>/dev/null || true
 fi
-echo 'export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$HOME/bin:$PATH"' >> /home/$WSL_USER/.bashrc
+echo 'export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$HOME/bin:$PATH"' >> /home/${WSL_USER}/.bashrc
 export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$HOME/bin:$PATH"
 
 echo "=== Creating venv ==="
@@ -86,8 +87,8 @@ uv pip install --python $VENV_PYTHON ipykernel jupyter_client
 
 # --- Step 6: Install kernel-manager ---
 echo "=== Step 6: Installing kernel-manager ==="
-mkdir -p /home/$WSL_USER/bin
-cat > /home/$WSL_USER/bin/kernel-manager.sh << 'KERNEL_MANAGER_EOF'
+mkdir -p /home/${WSL_USER}/bin
+cat > /home/${WSL_USER}/bin/kernel-manager.sh << 'KERNEL_MANAGER_EOF'
 #!/bin/bash
 REGISTRY="$HOME/.kernels/registry.json"
 KERNELS_DIR="$HOME/.kernels"
@@ -250,7 +251,7 @@ case "$1" in
     *) echo "Usage: kernel-manager {create|delete|list|heartbeat|cleanup} [name] [venv_python]" ;;
 esac
 KERNEL_MANAGER_EOF
-chmod +x /home/$WSL_USER/bin/kernel-manager.sh
+chmod +x /home/${WSL_USER}/bin/kernel-manager.sh
 
 # --- Step 7: Kernel cleanup timer ---
 echo "=== Step 7: Installing kernel cleanup timer ==="
@@ -260,8 +261,8 @@ Description=Cleanup inactive ipykernels
 
 [Service]
 Type=oneshot
-User=$WSL_USER
-ExecStart=/home/$WSL_USER/bin/kernel-manager.sh cleanup
+User=${WSL_USER}
+ExecStart=/home/${WSL_USER}/bin/kernel-manager.sh cleanup
 EOF
 
 sudo tee /etc/systemd/system/kernel-cleanup.timer > /dev/null << EOF
@@ -307,8 +308,8 @@ if [ "$IS_WSL" = true ]; then
 fi
 
 echo "=== Writing tunnel config ==="
-CONFIG_FILE="/home/$WSL_USER/.cloudflared/config.yml"
-mkdir -p /home/$WSL_USER/.cloudflared
+CONFIG_FILE="/home/${WSL_USER}/.cloudflared/config.yml"
+mkdir -p /home/${WSL_USER}/.cloudflared
 if [ ! -f "$CONFIG_FILE" ]; then
     if [ "$IS_WSL" = true ]; then
         WIN_IP=$(ip route | grep default | awk '{print $3}')
@@ -319,7 +320,7 @@ if [ ! -f "$CONFIG_FILE" ]; then
     fi
     cat > "$CONFIG_FILE" << EOF
 tunnel: $TUNNEL_ID
-credentials-file: /home/$WSL_USER/.cloudflared/$TUNNEL_ID.json
+credentials-file: /home/${WSL_USER}/.cloudflared/$TUNNEL_ID.json
 
 ingress:
   - hostname: $CF_HOSTNAME_WSL
@@ -334,27 +335,24 @@ fi
 
 # --- Step 10: Cloudflared systemd service ---
 echo "=== Step 10: Creating cloudflared systemd service ==="
-if [ ! -f /etc/systemd/system/cloudflared-tunnel.service ]; then
-    sudo tee /etc/systemd/system/cloudflared-tunnel.service > /dev/null << EOF
+sudo tee /etc/systemd/system/cloudflared-tunnel.service > /dev/null << EOF
 [Unit]
 Description=Cloudflare Tunnel
 After=network.target
 
 [Service]
-User=$WSL_USER
-ExecStart=/usr/bin/cloudflared tunnel run $CF_TUNNEL
+User=${WSL_USER}
+ExecStart=/usr/bin/cloudflared tunnel run ${CF_TUNNEL}
 Restart=always
 RestartSec=5
 
 [Install]
 WantedBy=multi-user.target
 EOF
-    sudo systemctl enable cloudflared-tunnel
-    echo "Cloudflared service created."
-else
-    echo "Cloudflared service already exists, skipping."
-fi
+sudo systemctl daemon-reload
+sudo systemctl enable cloudflared-tunnel
 sudo systemctl restart cloudflared-tunnel
+echo "Cloudflared service created/updated."
 
 echo ""
 echo "✅ Setup complete!"
