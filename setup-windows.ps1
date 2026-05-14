@@ -1,10 +1,11 @@
 # ============================================================
-# USER CONFIG — edit these for your machine
+# USER CONFIG — you will be prompted for these values
 # ============================================================
-$WSL_USER        = "YOUR_WSL_USER"
+Write-Host "=== Setup Configuration ===" -ForegroundColor Cyan
+$WSL_USER        = Read-Host "WSL username (e.g. rrx)"
 $WSL_DISTRO      = "Ubuntu"
 $WSL_SSH_PORT    = "2222"
-$SOLVEIT_KEY     = "YOUR_SOLVEIT_KEY"
+$SOLVEIT_KEY     = Read-Host "Solveit SSH public key"
 $SETUP_LINUX     = "https://raw.githubusercontent.com/rleyvasal/gpu-dev-setup/main/setup-linux.sh"
 # ============================================================
 # DO NOT EDIT BELOW THIS LINE
@@ -13,6 +14,7 @@ $SETUP_LINUX     = "https://raw.githubusercontent.com/rleyvasal/gpu-dev-setup/ma
 $WINDOWS_USER = $env:USERNAME
 
 # --- Pre-flight checklist ---
+Write-Host ""
 Write-Host "=== PRE-FLIGHT CHECKLIST ===" -ForegroundColor Yellow
 Write-Host "  1. Rebooted after WSL install and created your WSL user" -ForegroundColor Yellow
 Write-Host "  2. Opened WSL terminal and run: cloudflared tunnel login" -ForegroundColor Yellow
@@ -94,8 +96,8 @@ Write-Host "WSL auto-start task created." -ForegroundColor Green
 
 # --- Step 6: Run setup-linux.sh inside WSL ---
 Write-Host "=== Step 6: Running Linux setup inside WSL ===" -ForegroundColor Cyan
-wsl -d $WSL_DISTRO -u $WSL_USER bash -c "curl -fsSL $SETUP_LINUX | bash"
+$env_vars = "WSL_USER='$WSL_USER' SOLVEIT_KEY='$SOLVEIT_KEY'"
+wsl -d $WSL_DISTRO -u $WSL_USER bash -c "$env_vars curl -fsSL $SETUP_LINUX | bash"
 
 Write-Host ""
 Write-Host "✅ Windows setup complete!" -ForegroundColor Green
-

@@ -1,13 +1,14 @@
 #!/bin/bash
 # ============================================================
-# USER CONFIG — edit these for your machine
+# USER CONFIG — prompted if not passed from setup-windows.ps1
 # ============================================================
-WSL_USER="YOUR_WSL_USER"
-WSL_SSH_PORT="2222"
-CF_DOMAIN="YOUR_DOMAIN"
-CF_TUNNEL="YOUR_TUNNEL_NAME"
-VENV_PATH="/home/YOUR_WSL_USER/projects/YOUR_PROJECT/.venv"
-SOLVEIT_KEY="YOUR_SOLVEIT_KEY"
+echo ""
+echo "=== Setup Configuration ==="
+[ -z "$WSL_USER" ]    && read -p "WSL username (e.g. rrx): " WSL_USER
+[ -z "$SOLVEIT_KEY" ] && read -p "Solveit SSH public key: " SOLVEIT_KEY
+read -p "Cloudflare domain (e.g. mydomain.com): " CF_DOMAIN
+read -p "Tunnel name (e.g. wsl-gpu): " CF_TUNNEL
+read -p "Project venv path (e.g. /home/rrx/projects/myproject/.venv): " VENV_PATH
 # ============================================================
 # DO NOT EDIT BELOW THIS LINE
 # ============================================================
@@ -38,6 +39,7 @@ sudo apt-get install -qy openssh-server curl wget ufw
 
 # --- Step 2: Configure SSH ---
 echo "=== Step 2: Configuring SSH on port $WSL_SSH_PORT ==="
+WSL_SSH_PORT=${WSL_SSH_PORT:-2222}
 sudo sed -i "s/#\?Port 22/Port $WSL_SSH_PORT/" /etc/ssh/sshd_config
 sudo sed -i -E "s/#?(PubkeyAuthentication).*/\1 yes/" /etc/ssh/sshd_config
 sudo sed -i -E "s/#?(PasswordAuthentication).*/\1 no/" /etc/ssh/sshd_config
@@ -363,4 +365,3 @@ echo "     kernel-manager.sh create solveit $VENV_PYTHON"
 echo "     kernel-manager.sh create macbook $VENV_PYTHON"
 echo "  2. Install your project packages:"
 echo "     uv pip install --python $VENV_PYTHON torch torchvision"
-
