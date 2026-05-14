@@ -6,13 +6,14 @@ echo ""
 echo "=== Setup Configuration ==="
 [ -z "$WSL_USER" ]    && read -p "WSL username (e.g. rrx): " WSL_USER
 [ -z "$SOLVEIT_KEY" ] && read -p "Solveit SSH public key: " SOLVEIT_KEY
-read -p "Cloudflare domain (e.g. mydomain.com): " CF_DOMAIN
-read -p "Tunnel name (e.g. wsl-gpu): " CF_TUNNEL
-read -p "Project venv path (e.g. /home/rrx/projects/myproject/.venv): " VENV_PATH
+[ -z "$CF_DOMAIN" ]   && read -p "Cloudflare domain (e.g. mydomain.com): " CF_DOMAIN
+[ -z "$CF_TUNNEL" ]   && read -p "Tunnel name (e.g. wsl-gpu): " CF_TUNNEL
+[ -z "$VENV_PATH" ]   && read -p "Project venv path (e.g. /home/rrx/projects/myproject/.venv): " VENV_PATH
 # ============================================================
 # DO NOT EDIT BELOW THIS LINE
 # ============================================================
 
+WSL_SSH_PORT=${WSL_SSH_PORT:-2222}
 CF_HOSTNAME_WSL="$CF_TUNNEL.$CF_DOMAIN"
 CF_HOSTNAME_WIN="win-ssh.$CF_DOMAIN"
 VENV_PYTHON="$VENV_PATH/bin/python"
@@ -39,7 +40,6 @@ sudo apt-get install -qy openssh-server curl wget ufw
 
 # --- Step 2: Configure SSH ---
 echo "=== Step 2: Configuring SSH on port $WSL_SSH_PORT ==="
-WSL_SSH_PORT=${WSL_SSH_PORT:-2222}
 sudo sed -i "s/#\?Port 22/Port $WSL_SSH_PORT/" /etc/ssh/sshd_config
 sudo sed -i -E "s/#?(PubkeyAuthentication).*/\1 yes/" /etc/ssh/sshd_config
 sudo sed -i -E "s/#?(PasswordAuthentication).*/\1 no/" /etc/ssh/sshd_config
@@ -296,7 +296,7 @@ if ! cloudflared tunnel list 2>/dev/null | grep -q "$CF_TUNNEL"; then
 else
     echo "Tunnel '$CF_TUNNEL' already exists, skipping."
 fi
-TUNNEL_ID=$(cloudflared tunnel list | grep $CF_TUNNEL | awk '{print $1}')
+TUNNEL_ID=$(cloudflared tunnel list | grep "$CF_TUNNEL" | awk '{print $1}')
 
 echo "=== Creating DNS records ==="
 cloudflared tunnel route dns $CF_TUNNEL $CF_HOSTNAME_WSL 2>/dev/null \
@@ -317,7 +317,7 @@ if [ ! -f "$CONFIG_FILE" ]; then
     else
         EXTRA_INGRESS=""
     fi
-    cat > $CONFIG_FILE << EOF
+    cat > "$CONFIG_FILE" << EOF
 tunnel: $TUNNEL_ID
 credentials-file: /home/$WSL_USER/.cloudflared/$TUNNEL_ID.json
 
@@ -365,3 +365,4 @@ echo "     kernel-manager.sh create solveit $VENV_PYTHON"
 echo "     kernel-manager.sh create macbook $VENV_PYTHON"
 echo "  2. Install your project packages:"
 echo "     uv pip install --python $VENV_PYTHON torch torchvision"
+

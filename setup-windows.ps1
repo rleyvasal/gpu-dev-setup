@@ -6,6 +6,9 @@ $WSL_USER        = Read-Host "WSL username (e.g. rrx)"
 $WSL_DISTRO      = "Ubuntu"
 $WSL_SSH_PORT    = "2222"
 $SOLVEIT_KEY     = Read-Host "Solveit SSH public key"
+$CF_DOMAIN       = Read-Host "Cloudflare domain (e.g. mydomain.com)"
+$CF_TUNNEL       = Read-Host "Tunnel name (e.g. wsl-gpu)"
+$VENV_PATH       = Read-Host "Project venv path (e.g. /home/rrx/projects/myproject/.venv)"
 $SETUP_LINUX     = "https://raw.githubusercontent.com/rleyvasal/gpu-dev-setup/main/setup-linux.sh"
 # ============================================================
 # DO NOT EDIT BELOW THIS LINE
@@ -96,8 +99,8 @@ Write-Host "WSL auto-start task created." -ForegroundColor Green
 
 # --- Step 6: Run setup-linux.sh inside WSL ---
 Write-Host "=== Step 6: Running Linux setup inside WSL ===" -ForegroundColor Cyan
-$env_vars = "WSL_USER='$WSL_USER' SOLVEIT_KEY='$SOLVEIT_KEY'"
-wsl -d $WSL_DISTRO -u $WSL_USER bash -c "$env_vars curl -fsSL $SETUP_LINUX | bash"
+wsl -d $WSL_DISTRO -u $WSL_USER bash -c "export WSL_USER='$WSL_USER'; export SOLVEIT_KEY='$SOLVEIT_KEY'; export CF_DOMAIN='$CF_DOMAIN'; export CF_TUNNEL='$CF_TUNNEL'; export VENV_PATH='$VENV_PATH'; curl -fsSL $SETUP_LINUX | bash"
 
 Write-Host ""
 Write-Host "✅ Windows setup complete!" -ForegroundColor Green
+
