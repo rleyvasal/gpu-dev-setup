@@ -1,0 +1,11 @@
+{
+  "remote.SSH.remotePlatform": {
+    "wsl-gpu": "linux"
+  },
+  "remote.SSH.defaultExtensions": [
+    "ms-python.python",
+    "ms-toolsai.jupyter"
+  ],
+  "remote.SSH.configFile": "~/.ssh/config"
+}
+
