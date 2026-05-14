@@ -4,12 +4,12 @@
 # ============================================================
 echo ""
 echo "=== Setup Configuration ==="
-WSL_USER=${WSL_USER:-$(whoami)}
-echo "Using Linux username: $WSL_USER"
+LINUX_USER=${LINUX_USER:-$(whoami)}
+echo "Using Linux username: $LINUX_USER"
 [ -z "$SOLVEIT_KEY" ] && read -p "Solveit SSH public key: " SOLVEIT_KEY
 [ -z "$CF_DOMAIN" ]   && read -p "Cloudflare domain (e.g. mydomain.com): " CF_DOMAIN
 [ -z "$CF_TUNNEL" ]   && read -p "Tunnel name (e.g. wsl-gpu): " CF_TUNNEL
-[ -z "$VENV_PATH" ]   && read -p "Project venv path (e.g. /home/$WSL_USER/projects/myproject/.venv): " VENV_PATH
+[ -z "$VENV_PATH" ]   && read -p "Project venv path (e.g. /home/$LINUX_USER/projects/myproject/.venv): " VENV_PATH
 # ============================================================
 # DO NOT EDIT BELOW THIS LINE
 # ============================================================
@@ -50,11 +50,11 @@ sudo systemctl restart ssh
 
 # --- Step 3: SSH keys ---
 echo "=== Step 3: Adding SSH keys ==="
-mkdir -p /home/${WSL_USER}/.ssh
-grep -qxF "$SOLVEIT_KEY" /home/${WSL_USER}/.ssh/authorized_keys 2>/dev/null \
-    || echo "$SOLVEIT_KEY" >> /home/${WSL_USER}/.ssh/authorized_keys
-chmod 700 /home/${WSL_USER}/.ssh
-chmod 600 /home/${WSL_USER}/.ssh/authorized_keys
+mkdir -p /home/${LINUX_USER}/.ssh
+grep -qxF "$SOLVEIT_KEY" /home/${LINUX_USER}/.ssh/authorized_keys 2>/dev/null \
+    || echo "$SOLVEIT_KEY" >> /home/${LINUX_USER}/.ssh/authorized_keys
+chmod 700 /home/${LINUX_USER}/.ssh
+chmod 600 /home/${LINUX_USER}/.ssh/authorized_keys
 
 # --- Step 4: Firewall ---
 echo "=== Step 4: Configuring firewall ==="
@@ -79,7 +79,7 @@ if ! command -v uv &> /dev/null; then
     curl -LsSf https://astral.sh/uv/install.sh | sh
     source $HOME/.local/bin/env 2>/dev/null || source $HOME/.cargo/env 2>/dev/null || true
 fi
-echo 'export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$HOME/bin:$PATH"' >> /home/${WSL_USER}/.bashrc
+echo 'export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$HOME/bin:$PATH"' >> /home/${LINUX_USER}/.bashrc
 export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$HOME/bin:$PATH"
 
 echo "=== Creating venv ==="
@@ -88,8 +88,8 @@ uv pip install --python $VENV_PYTHON ipykernel jupyter_client
 
 # --- Step 6: Install kernel-manager ---
 echo "=== Step 6: Installing kernel-manager ==="
-mkdir -p /home/${WSL_USER}/bin
-cat > /home/${WSL_USER}/bin/kernel-manager.sh << 'KERNEL_MANAGER_EOF'
+mkdir -p /home/${LINUX_USER}/bin
+cat > /home/${LINUX_USER}/bin/kernel-manager.sh << 'KERNEL_MANAGER_EOF'
 #!/bin/bash
 REGISTRY="$HOME/.kernels/registry.json"
 KERNELS_DIR="$HOME/.kernels"
@@ -252,7 +252,7 @@ case "$1" in
     *) echo "Usage: kernel-manager {create|delete|list|heartbeat|cleanup} [name] [venv_python]" ;;
 esac
 KERNEL_MANAGER_EOF
-chmod +x /home/${WSL_USER}/bin/kernel-manager.sh
+chmod +x /home/${LINUX_USER}/bin/kernel-manager.sh
 
 # --- Step 7: Kernel cleanup timer ---
 echo "=== Step 7: Installing kernel cleanup timer ==="
@@ -262,8 +262,8 @@ Description=Cleanup inactive ipykernels
 
 [Service]
 Type=oneshot
-User=${WSL_USER}
-ExecStart=/home/${WSL_USER}/bin/kernel-manager.sh cleanup
+User=${LINUX_USER}
+ExecStart=/home/${LINUX_USER}/bin/kernel-manager.sh cleanup
 EOF
 
 sudo tee /etc/systemd/system/kernel-cleanup.timer > /dev/null << EOF
@@ -315,8 +315,8 @@ if [ "$IS_WSL" = true ]; then
 fi
 
 echo "=== Writing tunnel config ==="
-CONFIG_FILE="/home/${WSL_USER}/.cloudflared/config.yml"
-mkdir -p /home/${WSL_USER}/.cloudflared
+CONFIG_FILE="/home/${LINUX_USER}/.cloudflared/config.yml"
+mkdir -p /home/${LINUX_USER}/.cloudflared
 if [ ! -f "$CONFIG_FILE" ]; then
     if [ "$IS_WSL" = true ]; then
         WIN_IP=$(ip route | grep default | awk '{print $3}')
@@ -327,7 +327,7 @@ if [ ! -f "$CONFIG_FILE" ]; then
     fi
     cat > "$CONFIG_FILE" << EOF
 tunnel: $TUNNEL_ID
-credentials-file: /home/${WSL_USER}/.cloudflared/$TUNNEL_ID.json
+credentials-file: /home/${LINUX_USER}/.cloudflared/$TUNNEL_ID.json
 
 ingress:
   - hostname: $CF_HOSTNAME_WSL
@@ -348,7 +348,7 @@ Description=Cloudflare Tunnel
 After=network.target
 
 [Service]
-User=${WSL_USER}
+User=${LINUX_USER}
 ExecStart=/usr/bin/cloudflared tunnel run ${CF_TUNNEL}
 Restart=always
 RestartSec=5

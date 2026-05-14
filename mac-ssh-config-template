@@ -10,10 +10,10 @@ Host wsl-gpu
   ServerAliveCountMax 10
 
 Host win-ssh
-  HostName win-ssh.YOUR_DOMAIN
+  HostName YOUR_TUNNEL_NAME.YOUR_DOMAIN
   Port 22
   User winuser
-  ProxyCommand /opt/homebrew/bin/cloudflared access tcp --hostname win-ssh.YOUR_DOMAIN
+  ProxyCommand /opt/homebrew/bin/cloudflared access tcp --hostname YOUR_TUNNEL_NAME.YOUR_DOMAIN
   ControlMaster no
   ServerAliveInterval 60
   ServerAliveCountMax 10
