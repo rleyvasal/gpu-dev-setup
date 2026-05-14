@@ -1,6 +1,3 @@
-Here's the updated `README.md` with a configuration section:
-
-```markdown
 # Remote GPU Development Environment
 
 Transform your gaming PC or any Linux machine into a remotely accessible
