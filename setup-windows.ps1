@@ -19,10 +19,14 @@ $WINDOWS_USER = $env:USERNAME
 # --- Pre-flight checklist ---
 Write-Host ""
 Write-Host "=== PRE-FLIGHT CHECKLIST ===" -ForegroundColor Yellow
-Write-Host "  1. Rebooted after WSL install and created your WSL user" -ForegroundColor Yellow
-Write-Host "  2. Opened WSL terminal and run: cloudflared tunnel login" -ForegroundColor Yellow
-Write-Host "  3. Completed the Cloudflare browser authentication" -ForegroundColor Yellow
-Write-Host ""
+Write-Host "  After this script completes:" -ForegroundColor Yellow
+Write-Host "  1. Create your Linux username when Ubuntu prompts you" -ForegroundColor Yellow
+Write-Host "  2. In the Ubuntu terminal, install cloudflared and authenticate:" -ForegroundColor Yellow
+Write-Host "     wget -q https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb -O /tmp/cloudflared.deb" -ForegroundColor Yellow
+Write-Host "     sudo dpkg -i /tmp/cloudflared.deb" -ForegroundColor Yellow
+Write-Host "     cloudflared tunnel login" -ForegroundColor Yellow
+Write-Host "  3. Then run setup-linux.sh:" -ForegroundColor Yellow
+Write-Host "     curl -fsSL https://raw.githubusercontent.com/rleyvasal/gpu-dev-setup/main/setup-linux.sh -o /tmp/setup-linux.sh && bash /tmp/setup-linux.sh" -ForegroundColor Yellow
 pause
 
 # --- Step 1: WSL ---
