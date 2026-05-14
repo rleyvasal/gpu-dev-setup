@@ -46,6 +46,17 @@ Before running any scripts, have the following information ready:
 | `YOUR_PROJECT` | Your project folder name | `myproject` |
 | `YOUR_SOLVEIT_KEY` | Your Solveit SSH public key | `ssh-ed25519 AAA...` |
 
+### Finding Your Windows Username
+
+Your Windows username is **not** "Administrator" or the display name — it's your actual login name. To find it:
+
+**PowerShell:**
+```powershell
+$env:USERNAME
+```
+
+Common examples: `john`, `johnsmith`, `j.smith` (not `John Smith`)
+
 > **How to find your Solveit SSH key:**
 > In your Solveit terminal run: `cat /app/data/.ssh/id_*.pub`
 

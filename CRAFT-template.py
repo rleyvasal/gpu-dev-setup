@@ -6,7 +6,7 @@ from jupyter_client import BlockingKernelClient
 # USER CONFIG — edit these for your machine
 # ============================================================
 WSL_USER        = "linuxuser"
-WINDOWS_USER    = "winuser"
+WINDOWS_USER    = "winuser"  # CHANGE THIS: Run $env:USERNAME in PowerShell to get Windows username
 WSL_HOSTNAME    = "YOUR_TUNNEL_NAME.YOUR_DOMAIN"   # e.g. wsl-gpu.yourdomain.com
 WIN_HOSTNAME    = "win-ssh.YOUR_DOMAIN"             # e.g. win-ssh.yourdomain.com
 WSL_SSH_PORT    = 2222

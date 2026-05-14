@@ -65,7 +65,7 @@ Write-Host "=== Step 3: Adding SSH keys ===" -ForegroundColor Cyan
 $adminKeyFile = "C:\ProgramData\ssh\administrators_authorized_keys"
 if (-not (Test-Path "C:\ProgramData\ssh")) { mkdir "C:\ProgramData\ssh" }
 $existingKeys = if (Test-Path $adminKeyFile) { Get-Content $adminKeyFile } else { @() }
-if ($existingKeys -notcontains $SOLVEIT_KEY) { Add-Content $adminKeyFile $SOLVEIT_KEY }
+if ($existingKeys -notcontains $SOLVEIT_KEY) { [System.IO.File]::AppendAllText($adminKeyFile, $SOLVEIT_KEY + "`n") }
 icacls $adminKeyFile /inheritance:r /grant "SYSTEM:F" /grant "Administrators:F"
 
 # --- Step 4: Firewall + disable sleep ---

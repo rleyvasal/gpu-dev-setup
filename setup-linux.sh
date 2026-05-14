@@ -296,7 +296,13 @@ echo "=== Step 9: Cloudflare tunnel setup ==="
 if ! cloudflared tunnel list 2>/dev/null | grep -q "$CF_TUNNEL"; then
     cloudflared tunnel create $CF_TUNNEL
 else
-    echo "Tunnel '$CF_TUNNEL' already exists, skipping."
+    echo "Tunnel '$CF_TUNNEL' already exists, skipping creation."
+    TUNNEL_ID=$(cloudflared tunnel list | grep "$CF_TUNNEL" | awk '{print $1}')
+    CREDS_FILE="$HOME/.cloudflared/${TUNNEL_ID}.json"
+    if [ ! -f "$CREDS_FILE" ]; then
+        echo "Regenerating credentials for existing tunnel..."
+        cloudflared tunnel token --cred-file "$CREDS_FILE" "$CF_TUNNEL"
+    fi
 fi
 TUNNEL_ID=$(cloudflared tunnel list | grep "$CF_TUNNEL" | awk '{print $1}')
 
@@ -364,4 +370,8 @@ echo "     kernel-manager.sh create solveit $VENV_PYTHON"
 echo "     kernel-manager.sh create macbook $VENV_PYTHON"
 echo "  2. Install your project packages:"
 echo "     uv pip install --python $VENV_PYTHON torch torchvision"
+
+echo "=== Step 11: Reloading shell configuration ==="
+source ~/.bashrc 2>/dev/null || true
+echo "Shell configuration reloaded."
 
