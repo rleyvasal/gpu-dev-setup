@@ -1,7 +1,7 @@
 Host wsl-gpu
   HostName YOUR_TUNNEL_NAME.YOUR_DOMAIN
   Port 2222
-  User YOUR_WSL_USER
+  User linuxuser
   ProxyCommand /opt/homebrew/bin/cloudflared access tcp --hostname YOUR_TUNNEL_NAME.YOUR_DOMAIN
   ControlMaster auto
   ControlPath ~/.ssh/control-%r@%h:%p
@@ -12,7 +12,7 @@ Host wsl-gpu
 Host win-ssh
   HostName win-ssh.YOUR_DOMAIN
   Port 22
-  User YOUR_WINDOWS_USER
+  User winuser
   ProxyCommand /opt/homebrew/bin/cloudflared access tcp --hostname win-ssh.YOUR_DOMAIN
   ControlMaster no
   ServerAliveInterval 60

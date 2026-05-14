@@ -4,11 +4,11 @@
 # ============================================================
 echo ""
 echo "=== Setup Configuration ==="
-[ -z "$WSL_USER" ]    && read -p "WSL username (e.g. rrx): " WSL_USER
+[ -z "$WSL_USER" ]    && read -p "WSL username (e.g. linuxuser): " WSL_USER
 [ -z "$SOLVEIT_KEY" ] && read -p "Solveit SSH public key: " SOLVEIT_KEY
 [ -z "$CF_DOMAIN" ]   && read -p "Cloudflare domain (e.g. mydomain.com): " CF_DOMAIN
 [ -z "$CF_TUNNEL" ]   && read -p "Tunnel name (e.g. wsl-gpu): " CF_TUNNEL
-[ -z "$VENV_PATH" ]   && read -p "Project venv path (e.g. /home/rrx/projects/myproject/.venv): " VENV_PATH
+[ -z "$VENV_PATH" ]   && read -p "Project venv path (e.g. /home/linuxuser/projects/myproject/.venv): " VENV_PATH
 # ============================================================
 # DO NOT EDIT BELOW THIS LINE
 # ============================================================

@@ -35,20 +35,19 @@ workloads. Accessible from Solveit, VSCode, or any SSH client.
 
 ## Configuration
 
-Before running any scripts, update the `USER CONFIG` section at the top
-of each file with your own values:
+Before running any scripts, have the following information ready:
 
-| Placeholder | Description | Files to update |
+| Placeholder | Description | Example |
 |---|---|---|
-| `YOUR_WSL_USER` | Your Linux/WSL username | `setup-windows.ps1`, `setup-linux.sh`, `CRAFT-template.py`, `mac-ssh-config-template` |
-| `YOUR_WINDOWS_USER` | Your Windows login username | `setup-windows.ps1`, `CRAFT-template.py`, `mac-ssh-config-template` |
-| `YOUR_DOMAIN` | Your Cloudflare domain (e.g. `mydomain.com`) | `setup-linux.sh`, `CRAFT-template.py`, `mac-ssh-config-template` |
-| `YOUR_TUNNEL_NAME` | Name for your Cloudflare tunnel (e.g. `wsl-gpu`) | `setup-linux.sh`, `CRAFT-template.py`, `mac-ssh-config-template` |
-| `YOUR_PROJECT` | Your project folder name | `setup-linux.sh`, `CRAFT-template.py` |
-| `YOUR_SOLVEIT_KEY` | Your Solveit SSH public key | `setup-windows.ps1`, `setup-linux.sh` |
+| `linuxuser` | Your Linux/WSL username | `devuser` |
+| `winuser` | Your Windows login username | `john` |
+| `YOUR_DOMAIN` | Your Cloudflare domain | `mydomain.com` |
+| `YOUR_TUNNEL_NAME` | Name for your Cloudflare tunnel | `wsl-gpu` |
+| `YOUR_PROJECT` | Your project folder name | `myproject` |
+| `YOUR_SOLVEIT_KEY` | Your Solveit SSH public key | `ssh-ed25519 AAA...` |
 
 > **How to find your Solveit SSH key:**
-> In Solveit, go to Settings → SSH Keys and copy your public key.
+> In your Solveit terminal run: `cat /app/data/.ssh/id_*.pub`
 
 ---
 
@@ -56,14 +55,13 @@ of each file with your own values:
 
 ### Windows (Gaming PC)
 
-1. Edit `USER CONFIG` in `setup-windows.ps1`
-2. Open PowerShell as Administrator and run:
+1. Open PowerShell as Administrator and run:
    ```powershell
    irm https://raw.githubusercontent.com/rleyvasal/gpu-dev-setup/main/setup-windows.ps1 | iex
    ```
-3. Follow the on-screen prompts:
+2. Follow the on-screen prompts:
    - If first-time WSL install, reboot when prompted
-   - Open Ubuntu from Start Menu and create your WSL user
+   - Open Ubuntu from Start Menu and create your Linux user (e.g. `linuxuser`)
    - In WSL terminal, authenticate with Cloudflare:
      ```bash
      cloudflared tunnel login
@@ -72,14 +70,13 @@ of each file with your own values:
 
 ### Native Linux
 
-1. Edit `USER CONFIG` in `setup-linux.sh`
-2. Authenticate with Cloudflare first:
+1. Authenticate with Cloudflare first:
    ```bash
    cloudflared tunnel login
    ```
-3. Run:
+2. Run:
    ```bash
-   curl -fsSL https://raw.githubusercontent.com/rleyvasal/gpu-dev-setup/main/setup-linux.sh | bash
+   curl -fsSL https://raw.githubusercontent.com/rleyvasal/gpu-dev-setup/main/setup-linux.sh -o /tmp/setup-linux.sh && bash /tmp/setup-linux.sh
    ```
 
 ---
@@ -107,8 +104,10 @@ uv pip install --python ~/projects/YOUR_PROJECT/.venv/bin/python torch torchvisi
 ## Client Setup
 
 ### Mac SSH config
-Copy `mac-ssh-config-template` contents into `~/.ssh/config`,
-replacing all placeholders with your values.
+Copy `mac-ssh-config-template` into `~/.ssh/config`, replacing:
+- `linuxuser` with your actual Linux username
+- `winuser` with your actual Windows username
+- `YOUR_TUNNEL_NAME` and `YOUR_DOMAIN` with your Cloudflare values
 
 ### Mac sleep alias (`~/.zshrc`)
 ```bash
@@ -117,11 +116,10 @@ alias sleepnow="ssh win-ssh 'powershell -Command \"rundll32.exe powrprof.dll,Set
 
 ### VSCode
 Copy `vscode-settings.json` into your project's `.vscode/` folder.
-No placeholders to update — VSCode uses your `~/.ssh/config` automatically.
 
 ### Solveit CRAFT
 Copy `CRAFT-template.py` into your solveit project folder and update
-the `USER CONFIG` section at the top with your values.
+the `USER CONFIG` section with your actual values.
 
 ---
 

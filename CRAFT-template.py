@@ -5,13 +5,13 @@ from jupyter_client import BlockingKernelClient
 # ============================================================
 # USER CONFIG — edit these for your machine
 # ============================================================
-WSL_USER        = "YOUR_WSL_USER"
-WINDOWS_USER    = "YOUR_WINDOWS_USER"
+WSL_USER        = "linuxuser"
+WINDOWS_USER    = "winuser"
 WSL_HOSTNAME    = "YOUR_TUNNEL_NAME.YOUR_DOMAIN"   # e.g. wsl-gpu.yourdomain.com
 WIN_HOSTNAME    = "win-ssh.YOUR_DOMAIN"             # e.g. win-ssh.yourdomain.com
 WSL_SSH_PORT    = 2222
-KERNEL_NAME     = "solveit"                         # name you used in kernel-manager create
-VENV_PYTHON     = "/home/YOUR_WSL_USER/projects/YOUR_PROJECT/.venv/bin/python"
+KERNEL_NAME     = "solveit"
+VENV_PYTHON     = "/home/linuxuser/projects/YOUR_PROJECT/.venv/bin/python"
 # ============================================================
 # DO NOT EDIT BELOW THIS LINE
 # ============================================================

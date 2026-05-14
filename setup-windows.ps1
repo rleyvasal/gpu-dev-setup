@@ -2,13 +2,13 @@
 # USER CONFIG — you will be prompted for these values
 # ============================================================
 Write-Host "=== Setup Configuration ===" -ForegroundColor Cyan
-$WSL_USER        = Read-Host "WSL username (e.g. rrx)"
+$WSL_USER        = Read-Host "WSL username (e.g. linuxuser)"
 $WSL_DISTRO      = "Ubuntu"
 $WSL_SSH_PORT    = "2222"
 $SOLVEIT_KEY     = Read-Host "Solveit SSH public key"
 $CF_DOMAIN       = Read-Host "Cloudflare domain (e.g. mydomain.com)"
 $CF_TUNNEL       = Read-Host "Tunnel name (e.g. wsl-gpu)"
-$VENV_PATH       = Read-Host "Project venv path (e.g. /home/rrx/projects/myproject/.venv)"
+$VENV_PATH       = Read-Host "Project venv path (e.g. /home/linuxuser/projects/myproject/.venv)"
 $SETUP_LINUX     = "https://raw.githubusercontent.com/rleyvasal/gpu-dev-setup/main/setup-linux.sh"
 # ============================================================
 # DO NOT EDIT BELOW THIS LINE
