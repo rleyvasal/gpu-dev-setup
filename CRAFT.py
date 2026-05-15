@@ -4,14 +4,13 @@ import re
 import subprocess
 import sys
 from pathlib import Path
-
+import os
 from IPython.core.magic import register_line_cell_magic
 from IPython.display import HTML, Image, display
 from jupyter_client import BlockingKernelClient
-
+import shutil
 
 CONFIG_PATH = Path.home() / ".config" / "gpu-dev" / "client-config.json"
-import shutil
 
 # Allow override via environment variable, otherwise auto-detect, fallback to default
 CLOUDFLARED_PATH = Path(
