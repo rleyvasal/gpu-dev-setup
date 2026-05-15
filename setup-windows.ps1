@@ -103,13 +103,16 @@ Write-Host "  4. A local client config will also be written for Python/SSH clien
 pause
 
 Run-Step "Step 1: Install WSL + distro" {
-    $distroInstalled = wsl --list 2>&1 | Select-String -SimpleMatch $WSL_DISTRO
+    $distroInstalled = $false
+    $output = wsl --list --quiet 2>$null
+    if ($LASTEXITCODE -eq 0 -and $output) {
+        $distroInstalled = ($output | ForEach-Object { $_.Trim() }) -contains $WSL_DISTRO
+    }
 
     if (-not $distroInstalled) {
-        wsl --install -d $WSL_DISTRO
-        Write-Host "WSL distro installed. Reboot if prompted, launch the distro, create your Linux user, then rerun." -ForegroundColor Yellow
-      Pause; return    
-} else {
+        wsl --install -d $WSL_DISTRO --no-launch
+        Write-Host "$WSL_DISTRO installed." -ForegroundColor Green
+    } else {
         Write-Host "$WSL_DISTRO already installed, skipping." -ForegroundColor Green
     }
 }
