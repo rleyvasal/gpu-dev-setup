@@ -311,14 +311,17 @@ Run-Step "Step 7: Write local client config" {
     $existing | ConvertTo-Json -Depth 4 | Set-Content $LOCAL_CLIENT_CONFIG_FILE
     Write-Host "Local client config written to $LOCAL_CLIENT_CONFIG_FILE" -ForegroundColor Green
 }
-
 Run-Step "Step 8: Run Linux setup" {
     wsl -d $WSL_DISTRO -u $WSL_USER -- bash -lc @"
 curl -fsSL '$SETUP_LINUX' -o /tmp/setup-linux.sh
 NON_INTERACTIVE=true bash /tmp/setup-linux.sh
 "@
 }
-if ($authCheck -notlike "*AUTH_OK*") {
+
+# Check if tunnel was created by looking for it in cloudflared tunnel list
+$tunnelCheck = wsl -d $WSL_DISTRO -u $WSL_USER -- bash -lc "cloudflared tunnel list 2>/dev/null | grep -q '$CF_TUNNEL' && echo 'TUNNEL_OK' || echo 'TUNNEL_MISSING'"
+
+if ($tunnelCheck -notlike "*TUNNEL_OK*") {
     Write-Host ""
     Write-Host "========================================" -ForegroundColor Red
     Write-Host "  ACTION REQUIRED" -ForegroundColor Red
@@ -333,6 +336,10 @@ if ($authCheck -notlike "*AUTH_OK*") {
     Write-Host "Then rerun this script to complete setup." -ForegroundColor Yellow
 } else {
     Write-Host ""
-    Write-Host "Windows setup complete!" -ForegroundColor Green
+    Write-Host "Setup complete!" -ForegroundColor Green
+    Write-Host "Tunnel '$CF_TUNNEL' is configured and running." -ForegroundColor Green
+    Write-Host ""
+    Write-Host "To connect to your remote kernel, run:" -ForegroundColor Cyan
+    Write-Host "  python -m remote_client" -ForegroundColor White
 }
 
