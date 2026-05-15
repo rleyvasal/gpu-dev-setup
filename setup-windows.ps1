@@ -15,8 +15,8 @@ function Run-Step {
         Write-Host "$Name completed." -ForegroundColor Green
     } catch {
         Write-Host "$Name failed: $($_.Exception.Message)" -ForegroundColor Red
-        exit 1
-    }
+        Pause; return
+   }
 }
 
 function Get-SafeName {
