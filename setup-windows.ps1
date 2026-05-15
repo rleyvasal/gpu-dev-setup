@@ -320,5 +320,21 @@ NON_INTERACTIVE=true bash /tmp/setup-linux.sh
 }
 
 Write-Host ""
-Write-Host "Windows setup complete!" -ForegroundColor Green
+# Check if cloudflared authentication completed
+$authCheck = wsl -d $WSL_DISTRO -u $WSL_USER -- bash -lc "cloudflared tunnel list 2>/dev/null && echo 'AUTH_OK' || echo 'AUTH_MISSING'"
+
+if ($authCheck -notlike "*AUTH_OK*") {
+    Write-Host ""
+    Write-Host "========================================" -ForegroundColor Red
+    Write-Host "  ACTION REQUIRED" -ForegroundColor Red
+    Write-Host "========================================" -ForegroundColor Red
+    Write-Host ""
+    Write-Host "In WSL, run: cloudflared tunnel login" -ForegroundColor Red
+    Write-Host ""
+    Write-Host "Then rerun this script to complete setup." -ForegroundColor Yellow
+} else {
+    Write-Host ""
+    Write-Host "Windows setup complete!" -ForegroundColor Green
+    Write-Host "Tunnel configured and running." -ForegroundColor Green
+}
 
