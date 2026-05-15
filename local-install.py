@@ -33,12 +33,22 @@ def load_config(config_path):
 
 
 def install_cloudflared():
+    import sys
+    
+    # Check if already installed
+    result = subprocess.run("which cloudflared", shell=True, capture_output=True)
+    if result.returncode == 0:
+        print("cloudflared already installed")
+        return
+    
+    # Platform-specific guidance
+    if sys.platform == "darwin":
+        print("Please install cloudflared: brew install cloudflared")
+        raise SystemExit(1)
+    
+    # Linux: auto-download
     Path(CLOUDFLARED_PATH).parent.mkdir(parents=True, exist_ok=True)
-    run(
-        "curl -fsSL "
-        "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 "
-        f"-o {CLOUDFLARED_PATH} && chmod +x {CLOUDFLARED_PATH}"
-    )
+    run("curl -fsSL ...")
 
 
 def update_ssh_config(cfg):
