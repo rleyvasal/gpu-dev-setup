@@ -41,12 +41,13 @@ function Read-HostDefault {
 }
 
 function Get-WSLDistros {
-    $lines = wsl --list --quiet 2>$null
-    if (-not $lines) { return @() }
+    $output = wsl --list --quiet 2>$null
+    if ($LASTEXITCODE -ne 0) { return @() }
+    if (-not $output) { return @() }
 
-    return $lines |
+    return $output |
         ForEach-Object { $_.Trim() } |
-        Where-Object { $_ -and $_ -notmatch '^docker-desktop' }
+        Where-Object { $_ -and $_ -notmatch '^docker-desktop' -and $_ -notmatch 'Windows Subsystem' }
 }
 
 function Get-DetectedLinuxUser {
