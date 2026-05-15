@@ -1,4 +1,55 @@
-blocks = [
+import argparse
+import json
+import re
+import subprocess
+import time
+from pathlib import Path
+
+from jupyter_client import BlockingKernelClient
+
+
+DEFAULT_CONFIG_PATH = Path.home() / ".config" / "gpu-dev" / "client-config.json"
+SSH_CONFIG_PATH = Path.home() / ".ssh" / "config"
+CLOUDFLARED_PATH = str(Path.home() / ".local" / "bin" / "cloudflared")
+
+
+def run(cmd, check=True, capture_output=False):
+    return subprocess.run(
+        cmd,
+        shell=True,
+        check=check,
+        capture_output=capture_output,
+        text=True,
+    )
+
+
+def ssh(host, cmd, capture_output=False, check=True):
+    quoted = json.dumps(cmd)
+    return run(f"ssh {host} {quoted}", check=check, capture_output=capture_output)
+
+
+def load_config(config_path):
+    return json.loads(config_path.read_text(encoding="utf-8"))
+
+
+def install_cloudflared():
+    Path(CLOUDFLARED_PATH).parent.mkdir(parents=True, exist_ok=True)
+    run(
+        "curl -fsSL "
+        "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 "
+        f"-o {CLOUDFLARED_PATH} && chmod +x {CLOUDFLARED_PATH}"
+    )
+
+
+def update_ssh_config(cfg):
+    linux_host = cfg["cf_hostname_linux"]
+    windows_host = cfg.get("cf_hostname_win", "")
+    linux_user = cfg["linux_user"]
+    windows_user = cfg.get("windows_user", "")
+    ssh_port = cfg["ssh_port"]
+    ssh_key_path = cfg.get("ssh_key_path", str(Path.home() / ".ssh" / "id_ed25519"))
+
+    blocks = [
         f"""Host linux-host
   HostName {linux_host}
   Port {ssh_port}
@@ -44,7 +95,7 @@ def load_remote_config():
 def ensure_kernel(cfg):
     kernel_name = cfg.get("kernel_client_name") or "client-kernel"
     venv_python = f"{cfg['venv_path']}/bin/python"
-    work_dir = cfg.get("kernel_work_dir", f"/home/{cfg['linux_user']}/gpu_dev_projects")
+    work_dir = cfg.get("kernel_work_dir", f"/home/{cfg['linux_user']}/gpu-dev-projects")
 
     ssh(
         "linux-host",
@@ -116,10 +167,12 @@ def main():
     kernel_name = ensure_kernel(cfg)
     kernel_info = fetch_kernel_info(kernel_name)
     start_port_forwarding(kernel_info)
-    connect_kernel(kernel_info)
+    kc = connect_kernel(kernel_info)
 
     print(f"Connected to kernel '{kernel_name}'.")
+    return kc
 
 
 if __name__ == "__main__":
     main()
+

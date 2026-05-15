@@ -252,7 +252,7 @@ Run-Step "Step 5: WSL startup scheduled task" {
 }
 
 Run-Step "Step 6: Write Linux config.json" {
-    $linuxConfigObject = [ordered]@{
+    $linuxConfigObject = @{
         linux_user         = $WSL_USER
         ssh_port           = [int]$SSH_PORT
         ssh_public_key     = $SSH_PUBLIC_KEY
@@ -268,26 +268,26 @@ Run-Step "Step 6: Write Linux config.json" {
         wsl_distro         = $WSL_DISTRO
     }
 
-    $linuxConfigJson = $linuxConfigObject | ConvertTo-Json -Depth 4
+    $linuxConfigJson = $linuxConfigObject | ConvertTo-Json -Compress
+    $jsonBytes = [System.Text.Encoding]::UTF8.GetBytes($linuxConfigJson)
+    $base64Json = [Convert]::ToBase64String($jsonBytes)
+
     $linuxConfigDir = "/home/$WSL_USER/.config/gpu-dev"
     $linuxConfigFile = "$linuxConfigDir/config.json"
 
-    wsl -d $WSL_DISTRO -u root -- bash -lc @"
-set -e
-mkdir -p '$linuxConfigDir'
-cat > '$linuxConfigFile' <<'EOF'
-$linuxConfigJson
-EOF
-chown -R '$WSL_USER':'$WSL_USER' '/home/$WSL_USER/.config'
-chmod 700 '$linuxConfigDir'
-chmod 600 '$linuxConfigFile'
-"@
+    wsl -d $WSL_DISTRO -u root -- bash -lc "mkdir -p '$linuxConfigDir'; echo '$base64Json' | base64 -d > '$linuxConfigFile'; chown -R '$WSL_USER':'$WSL_USER' '/home/$WSL_USER/.config'; chmod 700 '$linuxConfigDir'; chmod 600 '$linuxConfigFile'"
 }
 
 Run-Step "Step 7: Write local client config" {
     $existing = @{}
     if (Test-Path $LOCAL_CLIENT_CONFIG_FILE) {
-        $existing = Get-Content $LOCAL_CLIENT_CONFIG_FILE | ConvertFrom-Json -AsHashtable
+        $content = Get-Content $LOCAL_CLIENT_CONFIG_FILE -Raw
+        if ($content) {
+            $parsed = $content | ConvertFrom-Json
+            foreach ($prop in $parsed.PSObject.Properties) {
+                $existing[$prop.Name] = $prop.Value
+            }
+        }
     }
 
     $existing["linux_user"]         = $WSL_USER
