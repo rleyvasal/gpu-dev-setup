@@ -94,6 +94,7 @@ PY
     chmod 600 "$CLIENT_CONFIG_FILE"
 }
 
+# Load config from file if it exists (written by Windows setup or a previous run)
 if [ -f "$CONFIG_FILE" ]; then
     echo "Loading config from $CONFIG_FILE"
 
@@ -112,12 +113,25 @@ fi
 
 LINUX_USER="${LINUX_USER:-$(whoami)}"
 SSH_PORT="${SSH_PORT:-2222}"
-KERNEL_WORK_DIR="${KERNEL_WORK_DIR:-$HOME/gpu_dev_projects}"
+KERNEL_WORK_DIR="${KERNEL_WORK_DIR:-$HOME/gpu-dev-projects}"
 
-[ -z "${SSH_PUBLIC_KEY:-}" ] && read -r -p "SSH public key: " SSH_PUBLIC_KEY
-[ -z "${CF_DOMAIN:-}" ] && read -r -p "Cloudflare domain (e.g. mydomain.com): " CF_DOMAIN
-[ -z "${CF_TUNNEL:-}" ] && read -r -p "Tunnel name (e.g. gpu-dev): " CF_TUNNEL
-[ -z "${VENV_PATH:-}" ] && read -r -p "Project venv path (e.g. /home/$LINUX_USER/projects/myproject/.venv): " VENV_PATH
+# Only prompt interactively if not called from Windows setup
+if [ "${NON_INTERACTIVE:-}" != "true" ]; then
+    [ -z "${SSH_PUBLIC_KEY:-}" ] && read -r -p "SSH public key: " SSH_PUBLIC_KEY
+    [ -z "${CF_DOMAIN:-}" ] && read -r -p "Cloudflare domain (e.g. mydomain.com): " CF_DOMAIN
+    [ -z "${CF_TUNNEL:-}" ] && read -r -p "Tunnel name (e.g. gpu-dev): " CF_TUNNEL
+    if [ -z "${VENV_PATH:-}" ]; then
+        read -r -p "Project name [myproject]: " VENV_NAME
+        VENV_NAME="${VENV_NAME:-myproject}"
+        KERNEL_WORK_DIR="$HOME/gpu-dev-projects/$VENV_NAME"
+        VENV_PATH="$KERNEL_WORK_DIR/.venv"
+    fi
+else
+    [ -z "${SSH_PUBLIC_KEY:-}" ] && fail "SSH_PUBLIC_KEY is required but not set in config"
+    [ -z "${CF_DOMAIN:-}" ] && fail "CF_DOMAIN is required but not set in config"
+    [ -z "${CF_TUNNEL:-}" ] && fail "CF_TUNNEL is required but not set in config"
+    [ -z "${VENV_PATH:-}" ] && fail "VENV_PATH is required but not set in config"
+fi
 
 CF_HOSTNAME_LINUX="${CF_HOSTNAME_LINUX:-$LINUX_USER.$CF_DOMAIN}"
 CF_HOSTNAME_WIN="${CF_HOSTNAME_WIN:-${KERNEL_CLIENT_NAME:-$(hostname)}.$CF_DOMAIN}"
@@ -131,13 +145,15 @@ else
     echo "Running in native Linux mode"
 fi
 
-echo ""
-echo "=== PRE-FLIGHT CHECKLIST ==="
-echo "  1. This script is Linux-native and also supports WSL."
-echo "  2. Kernel manager will be installed to ~/bin/kernel-manager.sh."
-echo "  3. If using Cloudflare tunnels, cloudflared login must be completed before tunnel management."
-echo "  4. A local client config will be written to ~/.config/gpu-dev/client-config.json."
-read -r -p "Press Enter when ready..."
+if [ "${NON_INTERACTIVE:-}" != "true" ]; then
+    echo ""
+    echo "=== PRE-FLIGHT CHECKLIST ==="
+    echo "  1. This script is Linux-native and also supports WSL."
+    echo "  2. Kernel manager will be installed to ~/bin/kernel-manager.sh."
+    echo "  3. If using Cloudflare tunnels, cloudflared login must be completed before tunnel management."
+    echo "  4. A local client config will be written to ~/.config/gpu-dev/client-config.json."
+    read -r -p "Press Enter when ready..."
+fi
 
 step "Step 1: Install dependencies"
 sudo apt-get update -q
@@ -148,3 +164,213 @@ fi
 
 step "Step 2: Configure SSH on port $SSH_PORT"
 sudo sed -i -E "s/^#?Port [0-9]+/Port $SSH_PORT/" /etc/ssh/sshd_config
+sudo sed -i -E "s/#?(PubkeyAuthentication).*/\1 yes/" /etc/ssh/sshd_config
+sudo sed -i -E "s/#?(PasswordAuthentication).*/\1 no/" /etc/ssh/sshd_config
+sudo mkdir -p /run/sshd
+
+if systemd_usable; then
+    sudo systemctl enable ssh
+    sudo systemctl restart ssh
+else
+    echo "systemd is not available; skipping ssh service enable/restart"
+    if [ "$IS_WSL" = true ]; then
+        echo "WSL detected without usable systemd."
+    fi
+fi
+
+step "Step 3: Add SSH key"
+mkdir -p "$HOME/.ssh"
+touch "$HOME/.ssh/authorized_keys"
+grep -qxF "$SSH_PUBLIC_KEY" "$HOME/.ssh/authorized_keys" || echo "$SSH_PUBLIC_KEY" >> "$HOME/.ssh/authorized_keys"
+chmod 700 "$HOME/.ssh"
+chmod 600 "$HOME/.ssh/authorized_keys"
+
+step "Step 4: Configure firewall"
+if [ "$IS_WSL" = true ]; then
+    echo "Skipping Linux firewall configuration in WSL."
+else
+    sudo ufw allow "$SSH_PORT/tcp" comment "Linux SSH" || true
+    sudo ufw allow "22/tcp" comment "OpenSSH" || true
+    sudo ufw --force enable
+fi
+
+step "Step 5: Prepare paths and shell profile"
+mkdir -p "$KERNEL_WORK_DIR" "$HOME/bin"
+append_line_once 'export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$HOME/bin:$PATH"' "$HOME/.bashrc"
+export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$HOME/bin:$PATH"
+
+step "Step 6: Install uv and create venv"
+if ! command_exists uv; then
+    curl -LsSf https://astral.sh/uv/install.sh | sh
+    [ -f "$HOME/.local/bin/env" ] && . "$HOME/.local/bin/env" || true
+    [ -f "$HOME/.cargo/env" ] && . "$HOME/.cargo/env" || true
+    export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$HOME/bin:$PATH"
+fi
+
+if [ ! -d "$VENV_PATH" ]; then
+    mkdir -p "$(dirname "$VENV_PATH")"
+    uv venv "$VENV_PATH"
+    uv pip install --python "$VENV_PYTHON" ipykernel jupyter_client
+    echo "Venv created at $VENV_PATH"
+else
+    echo "Venv already exists at $VENV_PATH, skipping creation"
+    # Ensure ipykernel is installed even if venv exists
+    uv pip install --python "$VENV_PYTHON" ipykernel jupyter_client
+fi
+
+step "Step 7: Install kernel-manager.sh"
+curl -fsSL "$KERNEL_MANAGER_URL" -o "$HOME/bin/kernel-manager.sh"
+chmod +x "$HOME/bin/kernel-manager.sh"
+
+step "Step 8: Install kernel cleanup timer"
+if systemd_usable; then
+    sudo tee /etc/systemd/system/kernel-cleanup.service > /dev/null <<EOF
+[Unit]
+Description=Cleanup inactive ipykernels
+
+[Service]
+Type=oneshot
+User=${LINUX_USER}
+ExecStart=${HOME}/bin/kernel-manager.sh cleanup
+EOF
+
+    sudo tee /etc/systemd/system/kernel-cleanup.timer > /dev/null <<EOF
+[Unit]
+Description=Run kernel cleanup at 10pm daily
+
+[Timer]
+OnCalendar=*-*-* 22:00:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+EOF
+
+    sudo systemctl daemon-reload
+    sudo systemctl enable kernel-cleanup.timer
+    sudo systemctl restart kernel-cleanup.timer
+else
+    echo "systemd is not available; skipping kernel cleanup timer"
+fi
+
+step "Step 9: Install cloudflared"
+if ! command_exists cloudflared; then
+    wget -q https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb -O /tmp/cloudflared.deb
+    sudo dpkg -i /tmp/cloudflared.deb || sudo apt-get install -f -y
+else
+    echo "cloudflared already installed, skipping."
+fi
+
+step "Step 10: Validate cloudflared authentication"
+if ! cloudflared_authenticated; then
+    if [ "${NON_INTERACTIVE:-}" = "true" ]; then
+        echo "WARNING: cloudflared is not authenticated. Run 'cloudflared tunnel login' manually."
+        echo "Skipping tunnel setup steps."
+        SKIP_TUNNEL=true
+    else
+        fail "cloudflared is not authenticated. Run 'cloudflared tunnel login' and rerun the script."
+    fi
+else
+    SKIP_TUNNEL=false
+fi
+
+if [ "${SKIP_TUNNEL:-false}" = false ]; then
+
+step "Step 11: Create or reuse Cloudflare tunnel"
+if ! cloudflared tunnel list 2>/dev/null | awk '{print $2}' | grep -qx "$CF_TUNNEL"; then
+    cloudflared tunnel create "$CF_TUNNEL"
+fi
+
+TUNNEL_ID="$(cloudflared tunnel list | awk -v tunnel="$CF_TUNNEL" '$2 == tunnel {print $1; exit}')"
+[ -n "$TUNNEL_ID" ] || fail "Failed to determine tunnel id for $CF_TUNNEL"
+
+CREDS_FILE="$HOME/.cloudflared/${TUNNEL_ID}.json"
+[ -f "$CREDS_FILE" ] || echo "Warning: tunnel credentials file not found yet at $CREDS_FILE"
+
+step "Step 12: Create DNS routes"
+cloudflared tunnel route dns "$CF_TUNNEL" "$CF_HOSTNAME_LINUX" 2>/dev/null || echo "Linux DNS route already exists, skipping."
+if [ "$IS_WSL" = true ]; then
+    cloudflared tunnel route dns "$CF_TUNNEL" "$CF_HOSTNAME_WIN" 2>/dev/null || echo "Windows DNS route already exists, skipping."
+fi
+
+step "Step 13: Write cloudflared config"
+CONFIG_YML="$HOME/.cloudflared/config.yml"
+mkdir -p "$HOME/.cloudflared"
+
+if [ ! -f "$CONFIG_YML" ]; then
+    if [ "$IS_WSL" = true ]; then
+        WIN_IP="$(ip route | awk '/default/ {print $3; exit}')"
+        EXTRA_INGRESS="  - hostname: $CF_HOSTNAME_WIN
+    service: tcp://$WIN_IP:22"
+    else
+        EXTRA_INGRESS=""
+    fi
+
+    cat > "$CONFIG_YML" <<EOF
+tunnel: $TUNNEL_ID
+credentials-file: $HOME/.cloudflared/$TUNNEL_ID.json
+
+ingress:
+  - hostname: $CF_HOSTNAME_LINUX
+    service: tcp://localhost:$SSH_PORT
+$EXTRA_INGRESS
+  - service: http_status:404
+EOF
+else
+    echo "Cloudflared config already exists, preserving current file."
+fi
+
+step "Step 14: Write local client config"
+write_client_config
+echo "Local client config written to $CLIENT_CONFIG_FILE"
+
+step "Step 15: Create cloudflared service"
+if systemd_usable; then
+    sudo tee /etc/systemd/system/cloudflared-tunnel.service > /dev/null <<EOF
+[Unit]
+Description=Cloudflare Tunnel
+After=network.target
+
+[Service]
+User=${LINUX_USER}
+ExecStart=/usr/bin/cloudflared tunnel run ${CF_TUNNEL}
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+    sudo systemctl daemon-reload
+    sudo systemctl enable cloudflared-tunnel
+    sudo systemctl restart cloudflared-tunnel
+else
+    echo "systemd is not available; skipping cloudflared service"
+fi
+
+fi  # end SKIP_TUNNEL
+
+step "Step 16: Final instructions"
+echo "Setup complete."
+echo ""
+echo "Recommended first kernel command:"
+if [ -n "${KERNEL_CLIENT_NAME:-}" ]; then
+    echo "  kernel-manager.sh create \"$KERNEL_CLIENT_NAME\" \"$VENV_PYTHON\" \"$KERNEL_WORK_DIR\""
+else
+    echo "  kernel-manager.sh create \"$(hostname)-client\" \"$VENV_PYTHON\" \"$KERNEL_WORK_DIR\""
+fi
+echo ""
+echo "Local client config:"
+echo "  $CLIENT_CONFIG_FILE"
+echo ""
+echo "Example package install:"
+echo "  uv pip install --python \"$VENV_PYTHON\" torch torchvision"
+
+if [ "${SKIP_TUNNEL:-false}" = true ]; then
+    echo ""
+    echo "NOTE: Cloudflare tunnel was not configured."
+    echo "Run 'cloudflared tunnel login' then rerun this script to complete tunnel setup."
+fi
+
+. "$HOME/.bashrc" 2>/dev/null || true
+

@@ -15,7 +15,7 @@ function Run-Step {
         Write-Host "$Name completed." -ForegroundColor Green
     } catch {
         Write-Host "$Name failed: $($_.Exception.Message)" -ForegroundColor Red
-        Pause; return
+        Pause; exit 1
    }
 }
 
@@ -47,7 +47,8 @@ function Get-WSLDistros {
 
     return $output |
         ForEach-Object { $_.Trim() } |
-        Where-Object { $_ -and $_ -notmatch '^docker-desktop' -and $_ -notmatch 'Windows Subsystem' }
+        ForEach-Object { $_.Trim([char]0) } |
+        Where-Object { $_ -ne '' -and $_ -notmatch '^docker-desktop' }
 }
 
 function Get-DetectedLinuxUser {
@@ -75,25 +76,55 @@ $WINDOWS_HOME = $env:USERPROFILE
 $LOCAL_CLIENT_CONFIG_DIR = Join-Path $WINDOWS_HOME ".config\gpu-dev"
 $LOCAL_CLIENT_CONFIG_FILE = Join-Path $LOCAL_CLIENT_CONFIG_DIR "client-config.json"
 
-$distros = Get-WSLDistros
-if ($distros.Count -eq 1) {
-    $WSL_DISTRO = $distros[0]
-    Write-Host "Detected WSL distro: $WSL_DISTRO" -ForegroundColor Green
-} elseif ($distros.Count -gt 1) {
-    Write-Host "Detected WSL distros: $($distros -join ', ')" -ForegroundColor Yellow
-    $WSL_DISTRO = Read-HostDefault "WSL distro" $distros[0]
-} else {
-    $WSL_DISTRO = Read-HostDefault "WSL distro" "Ubuntu"
+# Load saved config if it exists
+if (Test-Path $LOCAL_CLIENT_CONFIG_FILE) {
+    $saved = Get-Content $LOCAL_CLIENT_CONFIG_FILE | ConvertFrom-Json
+    $WSL_DISTRO       = $saved.wsl_distro
+    $SSH_PORT         = $saved.ssh_port
+    $SSH_PUBLIC_KEY   = $saved.ssh_public_key
+    $CF_DOMAIN        = $saved.cf_domain
+    $CF_TUNNEL        = $saved.cf_tunnel
+    $VENV_NAME        = $saved.venv_name
+    $KERNEL_CLIENT_NAME = $saved.kernel_client_name
 }
 
-$SSH_PORT = Read-HostDefault "Linux SSH port" "2222"
-$SSH_PUBLIC_KEY = Read-Host "SSH public key"
-$CF_DOMAIN = Read-Host "Cloudflare domain (e.g. mydomain.com)"
-$CF_TUNNEL = Read-Host "Tunnel name (e.g. gpu-dev)"
-$VENV_PATH = Read-Host "Project venv path (e.g. /home/linuxuser/projects/myproject/.venv)"
+# Only prompt for values we don't already have
+if (-not $WSL_DISTRO) {
+    $distros = Get-WSLDistros
+    if ($distros.Count -eq 1) {
+        $WSL_DISTRO = $distros[0]
+        Write-Host "Detected WSL distro: $WSL_DISTRO" -ForegroundColor Green
+    } elseif ($distros.Count -gt 1) {
+        Write-Host "Detected WSL distros: $($distros -join ', ')" -ForegroundColor Yellow
+        $WSL_DISTRO = Read-HostDefault "WSL distro" $distros[0]
+    } else {
+        $WSL_DISTRO = Read-HostDefault "WSL distro" "Ubuntu"
+    }
+}
+
+if (-not $SSH_PORT) { $SSH_PORT = Read-HostDefault "Linux SSH port" "2222" }
+if (-not $SSH_PUBLIC_KEY) { $SSH_PUBLIC_KEY = Read-Host "SSH public key" }
+if (-not $CF_DOMAIN) { $CF_DOMAIN = Read-Host "Cloudflare domain (e.g. mydomain.com)" }
+if (-not $CF_TUNNEL) { $CF_TUNNEL = Read-Host "Tunnel name (e.g. gpu-dev)" }
+if (-not $VENV_NAME) { $VENV_NAME = Read-HostDefault "Project name" "myproject" }
 $SETUP_LINUX = "https://raw.githubusercontent.com/rleyvasal/gpu-dev-setup/main/setup-linux.sh"
 
 $KERNEL_CLIENT_NAME = Get-SafeName "$COMPUTER_NAME-$WINDOWS_USER"
+
+# Save inputs early so reruns don't re-prompt
+if (-not (Test-Path $LOCAL_CLIENT_CONFIG_DIR)) {
+    New-Item -ItemType Directory -Path $LOCAL_CLIENT_CONFIG_DIR -Force | Out-Null
+}
+@{
+    wsl_distro         = $WSL_DISTRO
+    ssh_port           = [int]$SSH_PORT
+    ssh_public_key     = $SSH_PUBLIC_KEY
+    cf_domain          = $CF_DOMAIN
+    cf_tunnel          = $CF_TUNNEL
+    venv_name          = $VENV_NAME
+    kernel_client_name = $KERNEL_CLIENT_NAME
+    windows_user       = $WINDOWS_USER
+} | ConvertTo-Json | Set-Content $LOCAL_CLIENT_CONFIG_FILE
 
 Write-Host ""
 Write-Host "=== PRE-FLIGHT CHECKLIST ===" -ForegroundColor Yellow
@@ -107,12 +138,26 @@ Run-Step "Step 1: Install WSL + distro" {
     $distroInstalled = $false
     $output = wsl --list --quiet 2>$null
     if ($LASTEXITCODE -eq 0 -and $output) {
-        $distroInstalled = ($output | ForEach-Object { $_.Trim() }) -contains $WSL_DISTRO
+        $cleaned = $output | ForEach-Object { $_.Trim() } | ForEach-Object { $_.Trim([char]0) } | Where-Object { $_ -ne '' }
+        $distroInstalled = $cleaned -contains $WSL_DISTRO
     }
 
     if (-not $distroInstalled) {
-        wsl --install -d $WSL_DISTRO --no-launch
-        Write-Host "$WSL_DISTRO installed." -ForegroundColor Green
+        # Ensure required Windows features are enabled
+        $features = @("VirtualMachinePlatform", "Microsoft-Windows-Subsystem-Linux")
+        foreach ($feat in $features) {
+            try {
+                $state = (Get-WindowsOptionalFeature -Online -FeatureName $feat).State
+                if ($state -ne "Enabled") {
+                    Write-Host "Enabling $feat..." -ForegroundColor Yellow
+                    Enable-WindowsOptionalFeature -Online -FeatureName $feat -All -NoRestart | Out-Null
+                }
+            } catch {
+                Write-Host "Could not check $feat via PowerShell, will let wsl --install handle it." -ForegroundColor Yellow
+            }
+        }
+
+        wsl --install -d $WSL_DISTRO
     } else {
         Write-Host "$WSL_DISTRO already installed, skipping." -ForegroundColor Green
     }
@@ -123,15 +168,25 @@ if (-not $WSL_USER) {
     Write-Host ""
     Write-Host "Could not detect a non-root Linux user in $WSL_DISTRO." -ForegroundColor Yellow
     Write-Host "Launch the distro once, create your Linux user, then rerun this script." -ForegroundColor Yellow
-    Pause; return
+    Pause; exit 1
 }
+
+# Construct paths now that we know the Linux user
+$KERNEL_WORK_DIR = "/home/$WSL_USER/gpu-dev-projects/$VENV_NAME"
+$VENV_PATH = "$KERNEL_WORK_DIR/.venv"
 
 $CF_HOSTNAME_LINUX = "$($WSL_USER.ToLower()).$CF_DOMAIN"
 $CF_HOSTNAME_WIN = "$KERNEL_CLIENT_NAME.$CF_DOMAIN"
 
 Run-Step "Step 2: Install and configure OpenSSH" {
-    $sshInstalled = Get-WindowsCapability -Online -Name OpenSSH.Server~~~~0.0.1.0 | Select-Object -ExpandProperty State
-    if ($sshInstalled -ne 'Installed') {
+    $sshState = "Unknown"
+    try {
+        $sshState = Get-WindowsCapability -Online -Name OpenSSH.Server~~~~0.0.1.0 | Select-Object -ExpandProperty State
+    } catch {
+        Write-Host "Could not check OpenSSH via DISM, attempting install anyway..." -ForegroundColor Yellow
+    }
+
+    if ($sshState -ne 'Installed') {
         Add-WindowsCapability -Online -Name OpenSSH.Server~~~~0.0.1.0
     } else {
         Write-Host "OpenSSH already installed, skipping." -ForegroundColor Green
@@ -205,9 +260,10 @@ Run-Step "Step 6: Write Linux config.json" {
         cf_tunnel          = $CF_TUNNEL
         cf_hostname_linux  = $CF_HOSTNAME_LINUX
         cf_hostname_win    = $CF_HOSTNAME_WIN
+        venv_name          = $VENV_NAME
         venv_path          = $VENV_PATH
         kernel_client_name = $KERNEL_CLIENT_NAME
-        kernel_work_dir    = "/home/$WSL_USER/gpu_dev_projects"
+        kernel_work_dir    = $KERNEL_WORK_DIR
         windows_user       = $WINDOWS_USER
         wsl_distro         = $WSL_DISTRO
     }
@@ -229,33 +285,37 @@ chmod 600 '$linuxConfigFile'
 }
 
 Run-Step "Step 7: Write local client config" {
-    $clientConfigObject = [ordered]@{
-        linux_user         = $WSL_USER
-        windows_user       = $WINDOWS_USER
-        ssh_port           = [int]$SSH_PORT
-        cf_domain          = $CF_DOMAIN
-        cf_tunnel          = $CF_TUNNEL
-        cf_hostname_linux  = $CF_HOSTNAME_LINUX
-        cf_hostname_win    = $CF_HOSTNAME_WIN
-        venv_path          = $VENV_PATH
-        kernel_client_name = $KERNEL_CLIENT_NAME
-        kernel_work_dir    = "/home/$WSL_USER/gpu_dev_projects"
-        ssh_key_path       = (Join-Path $WINDOWS_HOME ".ssh\id_ed25519")
-        source_platform    = "windows-wsl"
+    $existing = @{}
+    if (Test-Path $LOCAL_CLIENT_CONFIG_FILE) {
+        $existing = Get-Content $LOCAL_CLIENT_CONFIG_FILE | ConvertFrom-Json -AsHashtable
     }
+
+    $existing["linux_user"]         = $WSL_USER
+    $existing["windows_user"]       = $WINDOWS_USER
+    $existing["ssh_port"]           = [int]$SSH_PORT
+    $existing["cf_domain"]          = $CF_DOMAIN
+    $existing["cf_tunnel"]          = $CF_TUNNEL
+    $existing["cf_hostname_linux"]  = $CF_HOSTNAME_LINUX
+    $existing["cf_hostname_win"]    = $CF_HOSTNAME_WIN
+    $existing["venv_name"]          = $VENV_NAME
+    $existing["venv_path"]          = $VENV_PATH
+    $existing["kernel_client_name"] = $KERNEL_CLIENT_NAME
+    $existing["kernel_work_dir"]    = $KERNEL_WORK_DIR
+    $existing["ssh_key_path"]       = (Join-Path $WINDOWS_HOME ".ssh\id_ed25519")
+    $existing["source_platform"]    = "windows-wsl"
 
     if (-not (Test-Path $LOCAL_CLIENT_CONFIG_DIR)) {
         New-Item -ItemType Directory -Path $LOCAL_CLIENT_CONFIG_DIR -Force | Out-Null
     }
 
-    $clientConfigObject | ConvertTo-Json -Depth 4 | Set-Content $LOCAL_CLIENT_CONFIG_FILE
+    $existing | ConvertTo-Json -Depth 4 | Set-Content $LOCAL_CLIENT_CONFIG_FILE
     Write-Host "Local client config written to $LOCAL_CLIENT_CONFIG_FILE" -ForegroundColor Green
 }
 
 Run-Step "Step 8: Run Linux setup" {
     wsl -d $WSL_DISTRO -u $WSL_USER -- bash -lc @"
 curl -fsSL '$SETUP_LINUX' -o /tmp/setup-linux.sh
-bash /tmp/setup-linux.sh
+NON_INTERACTIVE=true bash /tmp/setup-linux.sh
 "@
 }
 
