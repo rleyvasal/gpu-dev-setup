@@ -265,6 +265,16 @@ else
     echo "cloudflared already installed, skipping."
 fi
 
+step "Step 9b: Create cloudflared symlink for CRAFT compatibility"
+mkdir -p "$HOME/.local/bin"
+CF_ACTUAL_PATH=$(command -v cloudflared 2>/dev/null || true)
+if [ -n "$CF_ACTUAL_PATH" ] && [ "$CF_ACTUAL_PATH" != "$HOME/.local/bin/cloudflared" ]; then
+    ln -sf "$CF_ACTUAL_PATH" "$HOME/.local/bin/cloudflared"
+    echo "Created symlink: ~/.local/bin/cloudflared -> $CF_ACTUAL_PATH"
+else
+    echo "cloudflared already at expected location or not installed, skipping symlink"
+fi
+
 step "Step 10: Validate cloudflared authentication"
 if ! cloudflared_authenticated; then
     if [ "${NON_INTERACTIVE:-}" = "true" ]; then
