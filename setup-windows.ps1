@@ -318,11 +318,6 @@ curl -fsSL '$SETUP_LINUX' -o /tmp/setup-linux.sh
 NON_INTERACTIVE=true bash /tmp/setup-linux.sh
 "@
 }
-
-Write-Host ""
-# Check if cloudflared authentication completed
-$authCheck = wsl -d $WSL_DISTRO -u $WSL_USER -- bash -lc "cloudflared tunnel list 2>/dev/null && echo 'AUTH_OK' || echo 'AUTH_MISSING'"
-
 if ($authCheck -notlike "*AUTH_OK*") {
     Write-Host ""
     Write-Host "========================================" -ForegroundColor Red
@@ -331,10 +326,13 @@ if ($authCheck -notlike "*AUTH_OK*") {
     Write-Host ""
     Write-Host "In WSL, run: cloudflared tunnel login" -ForegroundColor Red
     Write-Host ""
+    Write-Host "Tip: If the browser link only logs you in but doesn't" -ForegroundColor Yellow
+    Write-Host "prompt for authentication, paste the same link again while logged in" -ForegroundColor Yellow
+    Write-Host "to complete the tunnel authorization." -ForegroundColor Yellow
+    Write-Host ""
     Write-Host "Then rerun this script to complete setup." -ForegroundColor Yellow
 } else {
     Write-Host ""
     Write-Host "Windows setup complete!" -ForegroundColor Green
-    Write-Host "Tunnel configured and running." -ForegroundColor Green
 }
 
