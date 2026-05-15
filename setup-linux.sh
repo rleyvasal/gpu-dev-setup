@@ -156,10 +156,14 @@ if [ "${NON_INTERACTIVE:-}" != "true" ]; then
 fi
 
 step "Step 1: Install dependencies"
-sudo apt-get update -q
-sudo apt-get install -qy openssh-server curl wget python3 python3-venv
-if [ "$IS_WSL" = false ]; then
-    sudo apt-get install -qy ufw
+if ! command -v sshd >/dev/null 2>&1 || ! command -v curl >/dev/null 2>&1 || ! dpkg -l | grep -q "^ii  python3-venv"; then
+    sudo apt-get update -q
+    sudo apt-get install -qy openssh-server curl wget python3 python3-venv
+    if [ "$IS_WSL" = false ]; then
+        sudo apt-get install -qy ufw
+    fi
+else
+    echo "Dependencies already installed, skipping."
 fi
 
 step "Step 2: Configure SSH on port $SSH_PORT"
