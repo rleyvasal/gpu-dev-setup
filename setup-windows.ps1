@@ -108,8 +108,8 @@ Run-Step "Step 1: Install WSL + distro" {
     if (-not $distroInstalled) {
         wsl --install -d $WSL_DISTRO
         Write-Host "WSL distro installed. Reboot if prompted, launch the distro, create your Linux user, then rerun." -ForegroundColor Yellow
-        exit 0
-    } else {
+      Pause; return    
+} else {
         Write-Host "$WSL_DISTRO already installed, skipping." -ForegroundColor Green
     }
 }
@@ -119,7 +119,7 @@ if (-not $WSL_USER) {
     Write-Host ""
     Write-Host "Could not detect a non-root Linux user in $WSL_DISTRO." -ForegroundColor Yellow
     Write-Host "Launch the distro once, create your Linux user, then rerun this script." -ForegroundColor Yellow
-    exit 1
+    Pause; return
 }
 
 $CF_HOSTNAME_LINUX = "$($WSL_USER.ToLower()).$CF_DOMAIN"
