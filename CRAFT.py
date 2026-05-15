@@ -11,7 +11,15 @@ from jupyter_client import BlockingKernelClient
 
 
 CONFIG_PATH = Path.home() / ".config" / "gpu-dev" / "client-config.json"
-CLOUDFLARED_PATH = Path.home() / ".local" / "bin" / "cloudflared"
+import shutil
+
+# Allow override via environment variable, otherwise auto-detect, fallback to default
+CLOUDFLARED_PATH = Path(
+    os.environ.get("CLOUDFLARED_PATH") 
+    or shutil.which("cloudflared") 
+    or (Path.home() / ".local" / "bin" / "cloudflared")
+)
+
 SSH_CONFIG_PATH = Path.home() / ".ssh" / "config"
 
 
