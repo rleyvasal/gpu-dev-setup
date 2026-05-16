@@ -1,3 +1,25 @@
+# Remote GPU Development Environment
+
+Transform your gaming PC or any Linux machine into a remotely accessible
+GPU development server. Connect securely from anywhere using Cloudflare
+tunnels — no port forwarding, no static IP, no router configuration required.
+
+Designed for deep learning training, data science, and GPU-accelerated
+workloads. Accessible from Solveit, VSCode, or any SSH client.
+
+---
+
+## What This Does
+
+- Converts a Windows gaming PC or Linux machine into a remote GPU server
+- Exposes it securely via Cloudflare tunnels
+- Manages multiple persistent Jupyter kernels — one per user or client
+- Keeps kernels alive across sessions so you can resume work anytime
+- Automatically cleans up inactive kernels at 10pm daily
+- Works with Solveit, VSCode Remote SSH, and Mac/Linux terminals
+
+---
+
 ## Installation
 
 ### Windows Setup (WSL)
