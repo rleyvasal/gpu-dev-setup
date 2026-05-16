@@ -214,12 +214,14 @@ fi
 if [ ! -d "$VENV_PATH" ]; then
     mkdir -p "$(dirname "$VENV_PATH")"
     uv venv "$VENV_PATH"
-    uv pip install --python "$VENV_PYTHON" ipykernel jupyter_client
+    uv pip install --python "$VENV_PYTHON" ipykernel jupyter_client torch torchvision torchaudio numpy pandas scipy scikit-learn matplotlib plotly pillow tqdm httpx requests
+
     echo "Venv created at $VENV_PATH"
 else
     echo "Venv already exists at $VENV_PATH, skipping creation"
     # Ensure ipykernel is installed even if venv exists
-    uv pip install --python "$VENV_PYTHON" ipykernel jupyter_client
+    uv pip install --python "$VENV_PYTHON" ipykernel jupyter_client torch torchvision torchaudio numpy pandas scipy scikit-learn matplotlib plotly pillow tqdm httpx requests
+
 fi
 
 step "Step 7: Install kernel-manager.sh"
