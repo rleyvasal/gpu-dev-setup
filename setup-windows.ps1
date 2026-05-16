@@ -243,12 +243,25 @@ Run-Step "Step 4: Firewall rules" {
     }
 }
 
-Run-Step "Step 5: Disable auto-sleep" {
+Run-Step "Step 5a: Disable auto-sleep" {
     powercfg /change standby-timeout-ac 0
     powercfg /change standby-timeout-dc 0
     powercfg /change hibernate-timeout-ac 0
     powercfg /change hibernate-timeout-dc 0
     Write-Host "Auto-sleep and hibernate disabled." -ForegroundColor Green
+}
+
+Run-Step "Step 5b: Configure WSL idle timeouts" {
+    $wslConfig = Join-Path $env:USERPROFILE ".wslconfig"
+    $content = @"
+[general]
+instanceIdleTimeout=-1
+
+[wsl2]
+vmIdleTimeout=-1
+"@
+    Set-Content $wslConfig $content
+    Write-Host "WSL idle timeouts disabled in $wslConfig" -ForegroundColor Green
 }
 
 
