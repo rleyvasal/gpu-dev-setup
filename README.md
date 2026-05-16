@@ -147,12 +147,8 @@ When running in WSL, the script additionally:
 - Skips UFW firewall configuration (handled by Windows)
 - Skips sleep/suspend configuration (handled by Windows host)
 
-#### Post-Install: Customizing Packages
+#### Notes 
 
-The default venv includes common ML/data science packages. To add more:
-
-```bash
-uv pip install --python ~/gpu-dev-projects/YOUR_PROJECT/.venv/bin/python <package>
-```
-| Sleepnow alias | Adds `sleepnow` command to PowerShell profile for manual sleep |
+The default venv includes common ML/data science packages.
+Sleepnow alias | Adds `sleepnow` command to PowerShell profile for manual sleep |
 
