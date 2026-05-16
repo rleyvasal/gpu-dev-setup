@@ -228,11 +228,11 @@ fi
 if [ ! -d "$VENV_PATH" ]; then
     mkdir -p "$(dirname "$VENV_PATH")"
     uv venv "$VENV_PATH" --project "$(dirname "$VENV_PATH")"
-    uv add --python "$VENV_PYTHON" ipykernel jupyter_client torch torchvision torchaudio numpy pandas scipy scikit-learn matplotlib plotly pillow tqdm httpx requests
+    (cd "$(dirname "$VENV_PATH")" && uv add --python "$VENV_PYTHON" ipykernel jupyter_client torch torchvision torchaudio numpy pandas scipy scikit-learn matplotlib plotly pillow tqdm httpx requests)
     echo "Venv created at $VENV_PATH"
 else
     echo "Venv exists at $VENV_PATH, skipping creation"
-    uv add --python "$VENV_PYTHON" ipykernel jupyter_client torch torchvision torchaudio numpy pandas scipy scikit-learn matplotlib plotly pillow tqdm httpx requests
+    (cd "$(dirname "$VENV_PATH")" && uv add --python "$VENV_PYTHON" ipykernel jupyter_client torch torchvision torchaudio numpy pandas scipy scikit-learn matplotlib plotly pillow tqdm httpx requests)
 fi
 
 step "Step 7: Install kernel-manager.sh"
