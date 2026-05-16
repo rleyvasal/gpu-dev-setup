@@ -34,10 +34,9 @@ workloads. Accessible from Solveit, VSCode, or any SSH client.
 
 Run as Administrator in PowerShell:
 
-```powershell
-.\setup-windows.ps1
-```
-
+  ```powershell
+   irm https://raw.githubusercontent.com/rleyvasal/gpu-dev-setup/main/setup-windows.ps1 | iex
+   ```
 On first run, you will be prompted for:
 - WSL distro name (auto-detected if only one exists)
 - Linux SSH port
