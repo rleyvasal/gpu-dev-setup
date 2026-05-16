@@ -220,17 +220,19 @@ if ! command_exists uv; then
     export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$HOME/bin:$PATH"
 fi
 
+# Always ensure project is initialized first (handles migration from old setups)
+if [ ! -f "$(dirname "$VENV_PATH")/pyproject.toml" ]; then
+    (cd "$(dirname "$VENV_PATH")" && uv init --name "$(basename "$(dirname "$VENV_PATH")")")
+fi
+
 if [ ! -d "$VENV_PATH" ]; then
     mkdir -p "$(dirname "$VENV_PATH")"
-    uv venv "$VENV_PATH"
-    uv pip install --python "$VENV_PYTHON" ipykernel jupyter_client torch torchvision torchaudio numpy pandas scipy scikit-learn matplotlib plotly pillow tqdm httpx requests
-
+    uv venv "$VENV_PATH" --project "$(dirname "$VENV_PATH")"
+    uv add --python "$VENV_PYTHON" ipykernel jupyter_client torch torchvision torchaudio numpy pandas scipy scikit-learn matplotlib plotly pillow tqdm httpx requests
     echo "Venv created at $VENV_PATH"
 else
-    echo "Venv already exists at $VENV_PATH, skipping creation"
-    # Ensure ipykernel is installed even if venv exists
-    uv pip install --python "$VENV_PYTHON" ipykernel jupyter_client torch torchvision torchaudio numpy pandas scipy scikit-learn matplotlib plotly pillow tqdm httpx requests
-
+    echo "Venv exists at $VENV_PATH, skipping creation"
+    uv add --python "$VENV_PYTHON" ipykernel jupyter_client torch torchvision torchaudio numpy pandas scipy scikit-learn matplotlib plotly pillow tqdm httpx requests
 fi
 
 step "Step 7: Install kernel-manager.sh"
