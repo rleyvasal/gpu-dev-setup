@@ -243,7 +243,16 @@ Run-Step "Step 4: Firewall rules" {
     }
 }
 
-Run-Step "Step 5: WSL startup scheduled task" {
+Run-Step "Step 5: Disable auto-sleep" {
+    powercfg /change standby-timeout-ac 0
+    powercfg /change standby-timeout-dc 0
+    powercfg /change hibernate-timeout-ac 0
+    powercfg /change hibernate-timeout-dc 0
+    Write-Host "Auto-sleep and hibernate disabled." -ForegroundColor Green
+}
+
+
+Run-Step "Step 6: WSL startup scheduled task" {
     $action = New-ScheduledTaskAction -Execute "wsl.exe" -Argument "-d $WSL_DISTRO"
     $t1 = New-ScheduledTaskTrigger -AtStartup
     $t2 = New-ScheduledTaskTrigger -AtLogOn -User $WINDOWS_USER
@@ -254,7 +263,7 @@ Run-Step "Step 5: WSL startup scheduled task" {
         -Principal $principal -Settings $settings -Force | Out-Null
 }
 
-Run-Step "Step 6: Write Linux config.json" {
+Run-Step "Step 7: Write Linux config.json" {
     $linuxConfigObject = @{
         linux_user         = $WSL_USER
         ssh_port           = [int]$SSH_PORT
@@ -281,7 +290,7 @@ Run-Step "Step 6: Write Linux config.json" {
     wsl -d $WSL_DISTRO -u root -- bash -lc "mkdir -p '$linuxConfigDir'; echo '$base64Json' | base64 -d > '$linuxConfigFile'; chown -R '$WSL_USER':'$WSL_USER' '/home/$WSL_USER/.config'; chmod 700 '$linuxConfigDir'; chmod 600 '$linuxConfigFile'"
 }
 
-Run-Step "Step 7: Write local client config" {
+Run-Step "Step 8: Write local client config" {
     $existing = @{}
     if (Test-Path $LOCAL_CLIENT_CONFIG_FILE) {
         $content = Get-Content $LOCAL_CLIENT_CONFIG_FILE -Raw
@@ -314,7 +323,7 @@ Run-Step "Step 7: Write local client config" {
     $existing | ConvertTo-Json -Depth 4 | Set-Content $LOCAL_CLIENT_CONFIG_FILE
     Write-Host "Local client config written to $LOCAL_CLIENT_CONFIG_FILE" -ForegroundColor Green
 }
-Run-Step "Step 8: Run Linux setup" {
+Run-Step "Step 9: Run Linux setup" {
     wsl -d $WSL_DISTRO -u $WSL_USER -- bash -lc @"
 curl -fsSL '$SETUP_LINUX' -o /tmp/setup-linux.sh
 NON_INTERACTIVE=true bash /tmp/setup-linux.sh
