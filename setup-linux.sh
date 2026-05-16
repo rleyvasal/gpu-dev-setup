@@ -198,6 +198,15 @@ else
     sudo ufw --force enable
 fi
 
+step "Step 4b: Disable sleep/suspend for always-on GPU server"
+if [ "$IS_WSL" = false ]; then
+    sudo systemctl mask sleep.target suspend.target hibernate.target hybrid-sleep.target
+    echo "Sleep/suspend disabled"
+else
+    echo "WSL detected, skipping (handled by Windows host)"
+fi
+
+
 step "Step 5: Prepare paths and shell profile"
 mkdir -p "$KERNEL_WORK_DIR" "$HOME/bin"
 append_line_once 'export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$HOME/bin:$PATH"' "$HOME/.bashrc"
