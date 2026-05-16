@@ -266,6 +266,20 @@ vmIdleTimeout=-1
     Write-Host "WSL idle timeouts disabled in $wslConfig" -ForegroundColor Green
 }
 
+Run-Step "Step 5c: Add sleepnow alias" {
+    $profileDir = Split-Path $PROFILE -Parent
+    if (-not (Test-Path $profileDir)) {
+        New-Item -ItemType Directory -Path $profileDir -Force | Out-Null
+    }
+    $funcLine = 'function sleepnow { rundll32.exe powrprof.dll,SetSuspendState 0,1,0 }'
+    if ((Test-Path $PROFILE) -and (Get-Content $PROFILE -Raw) -match 'function sleepnow') {
+        Write-Host "sleepnow alias already exists, skipping." -ForegroundColor Green
+    } else {
+        Add-Content $PROFILE "`n$funcLine"
+        Write-Host "Added sleepnow alias to PowerShell profile." -ForegroundColor Green
+    }
+}
+
 
 Run-Step "Step 6: WSL startup scheduled task" {
     $action = New-ScheduledTaskAction -Execute "wsl.exe" -Argument "-d $WSL_DISTRO"
