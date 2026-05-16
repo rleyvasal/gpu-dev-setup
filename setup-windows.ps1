@@ -192,22 +192,24 @@ Run-Step "Step 2: Install and configure OpenSSH" {
         Write-Host "OpenSSH already installed, skipping." -ForegroundColor Green
     }
 
-    # Generate host keys before starting the service
+    # Disable Windows Hello passwordless requirement (interferes with SSH key auth)
+    Set-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\PasswordLess\Device" -Name "DevicePasswordLessBuildVersion" -Value 0
+
+    # Generate host keys if missing
     ssh-keygen -A
+
+    # Write sshd config explicitly
+    $sshdConfig = "C:\ProgramData\ssh\sshd_config"
+    $requiredSettings = @"
+PubkeyAuthentication yes
+PasswordAuthentication no
+Match Group administrators
+       AuthorizedKeysFile __PROGRAMDATA__/ssh/administrators_authorized_keys
+"@
+    Set-Content $sshdConfig $requiredSettings
 
     Set-Service -Name sshd -StartupType Automatic
     Start-Service sshd
-
-    $sshdConfig = "C:\ProgramData\ssh\sshd_config"
-    $sshdContent = Get-Content $sshdConfig -Raw
-    $sshdContent = $sshdContent -replace '#?PubkeyAuthentication\s+\w+', 'PubkeyAuthentication yes'
-    $sshdContent = $sshdContent -replace '#?PasswordAuthentication\s+\w+', 'PasswordAuthentication no'
-
-    if ($sshdContent -notmatch 'administrators_authorized_keys') {
-        $sshdContent += "`r`nMatch Group administrators`r`n       AuthorizedKeysFile __PROGRAMDATA__/ssh/administrators_authorized_keys`r`n"
-    }
-
-    Set-Content $sshdConfig $sshdContent
     Restart-Service sshd
 }
 
