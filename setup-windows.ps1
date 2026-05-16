@@ -192,6 +192,9 @@ Run-Step "Step 2: Install and configure OpenSSH" {
         Write-Host "OpenSSH already installed, skipping." -ForegroundColor Green
     }
 
+    # Generate host keys before starting the service
+    ssh-keygen -A
+
     Set-Service -Name sshd -StartupType Automatic
     Start-Service sshd
 
