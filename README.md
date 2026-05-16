@@ -1,165 +1,137 @@
-# Remote GPU Development Environment
-
-Transform your gaming PC or any Linux machine into a remotely accessible
-GPU development server. Connect securely from anywhere using Cloudflare
-tunnels — no port forwarding, no static IP, no router configuration required.
-
-Designed for deep learning training, data science, and GPU-accelerated
-workloads. Accessible from Solveit, VSCode, or any SSH client.
-
----
-
-## What This Does
-
-- Converts a Windows gaming PC or Linux machine into a remote GPU server
-- Exposes it securely via Cloudflare tunnels
-- Manages multiple persistent Jupyter kernels — one per user or client
-- Keeps kernels alive across sessions so you can resume work anytime
-- Automatically cleans up inactive kernels at 10pm daily
-- Works with Solveit, VSCode Remote SSH, and Mac/Linux terminals
-
----
-
-## Prerequisites
-
-**On your server machine:**
-- Windows 10/11 with a GPU, or a Ubuntu/Debian Linux machine
-- A Cloudflare account with a domain configured
-
-**On your client machine (Mac/Linux laptop):**
-- `cloudflared` installed ([install guide](https://developers.cloudflare.com/cloudflare-one/connections/connect-apps/install-and-setup/installation/))
-- VSCode with Remote SSH extension (optional)
-- Solveit account (optional)
-
----
-
-## Configuration
-
-Before running any scripts, have the following information ready:
-
-| Placeholder | Description | Example |
-|---|---|---|
-| `linuxuser` | Your Linux/WSL username | `devuser` |
-| `winuser` | Your Windows login username | `john` |
-| `YOUR_DOMAIN` | Your Cloudflare domain | `mydomain.com` |
-| `YOUR_TUNNEL_NAME` | Name for your Cloudflare tunnel | `wsl-gpu` |
-| `YOUR_PROJECT` | Your project folder name | `myproject` |
-| `YOUR_SOLVEIT_KEY` | Your Solveit SSH public key | `ssh-ed25519 AAA...` |
-
-### Finding Your Windows Username
-
-Your Windows username is **not** "Administrator" or the display name — it's your actual login name. To find it:
-
-**PowerShell:**
-```powershell
-$env:USERNAME
-```
-
-Common examples: `john`, `johnsmith`, `j.smith` (not `John Smith`)
-
-> **How to find your Solveit SSH key:**
-> In your Solveit terminal run: `cat /app/data/.ssh/id_*.pub`
-
----
-
 ## Installation
 
-### Windows (Gaming PC)
+### Windows Setup (WSL)
 
-1. Open PowerShell as Administrator and run:
+#### Prerequisites
+
+- Windows 10/11 with Administrator access
+- An SSH public key for remote access
+- A Cloudflare account with a registered domain
+
+#### Run the Setup Script
+
+Run as Administrator in PowerShell:
+
+```powershell
+.\setup-windows.ps1
+```
+
+On first run, you will be prompted for:
+- WSL distro name (auto-detected if only one exists)
+- Linux SSH port
+- SSH public key
+- Cloudflare domain and tunnel name
+- Project name
+
+These values are saved to `~/.config/gpu-dev/client-config.json` so subsequent runs
+skip the prompts.
+
+#### What the Script Automates
+
+| Step | Description |
+|---|---|
+| WSL 2 | Installs WSL and your chosen Linux distro |
+| OpenSSH Server | Host key generation, pubkey auth, password auth disabled |
+| Windows Hello | Disables passwordless requirement for SSH compatibility |
+| SSH key | Adds your public key to administrators authorized keys |
+| Firewall | Opens ports for SSH (22 and custom Linux SSH port) |
+| Power settings | Disables auto-sleep and hibernate (AC and DC) |
+| WSL idle timeouts | Creates `.wslconfig` to prevent WSL from shutting down |
+| WSL startup | Scheduled task to start WSL at boot/login |
+| Config files | Written for both Linux and Windows sides |
+| Linux setup | Triggers `setup-linux.sh` inside WSL automatically |
+
+#### Manual Steps Required
+
+1. **First WSL launch** — If your distro is freshly installed, launch it once and create
+   your Linux user before running the script.
+
+2. **Cloudflare tunnel login** — After the script runs, if no tunnel is found, you will
+   be prompted to run `cloudflared tunnel login` inside WSL. This requires browser-based
+   authentication with your Cloudflare account.
+
+3. **Adding SSH keys from new clients** — The script only adds the key provided during
+   setup. To add keys from additional clients (e.g. solveit), manually append them on
+   Windows:
    ```powershell
-   irm https://raw.githubusercontent.com/rleyvasal/gpu-dev-setup/main/setup-windows.ps1 | iex
+   Add-Content "C:\ProgramData\ssh\administrators_authorized_keys" "<public-key>"
+   icacls "C:\ProgramData\ssh\administrators_authorized_keys" /inheritance:r /grant "SYSTEM:F" /grant "Administrators:F"
+   Restart-Service sshd
    ```
-2. Follow the on-screen prompts:
-   - If first-time WSL install, reboot when prompted
-   - Open Ubuntu from Start Menu and create your Linux user (e.g. `linuxuser`)
-   - In WSL terminal, authenticate with Cloudflare:
-     ```bash
-     cloudflared tunnel login
-     ```
-   - Re-run the script to complete setup
 
-### Native Linux
+---
 
-1. Authenticate with Cloudflare first:
+### Native Linux (Standalone or WSL)
+
+The Linux setup script supports two modes:
+- **Standalone** — install directly on a Ubuntu/Debian machine with a GPU
+- **WSL** — called automatically by `setup-windows.ps1`
+
+When running in WSL mode, the script configures both Linux and Windows SSH access
+through a single Cloudflare tunnel. When running standalone, it configures only
+Linux SSH access.
+
+#### Before You Start (Standalone Only)
+
+If running standalone (not via the Windows script), complete these steps first:
+
+1. **Install cloudflared** if not already installed:
+   ```bash
+   wget -q https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb -O /tmp/cloudflared.deb
+   sudo dpkg -i /tmp/cloudflared.deb
+   ```
+
+2. **Authenticate with Cloudflare:**
    ```bash
    cloudflared tunnel login
    ```
-2. Run:
-   ```bash
-   curl -fsSL https://raw.githubusercontent.com/rleyvasal/gpu-dev-setup/main/setup-linux.sh -o /tmp/setup-linux.sh && bash /tmp/setup-linux.sh
-   ```
 
----
+3. **Have your SSH public key ready.** This is the public key from the client machine
+   (e.g. solveit, Mac) that will connect to this server.
+   - For Solveit: `cat /app/data/.ssh/id_*.pub`
+   - For Mac/Linux: `cat ~/.ssh/id_ed25519.pub`
 
-## First Run — Create Your Kernels
+#### Run the Setup Script
 
-After setup completes, SSH into your machine and create a kernel for each user:
 ```bash
-kernel-manager.sh create solveit
-kernel-manager.sh create macbook
+curl -fsSL https://raw.githubusercontent.com/rleyvasal/gpu-dev-setup/main/setup-linux.sh -o /tmp/setup-linux.sh && bash /tmp/setup-linux.sh
 ```
 
-Verify they are running:
-```bash
-kernel-manager.sh list
-```
+The script will prompt you for:
+- Your SSH public key
+- Your Cloudflare domain (e.g. `mydomain.com`)
+- Your tunnel name (e.g. `gpu-dev`)
+- Your project name (e.g. `myproject`)
 
-Then install your project packages:
-```bash
-uv pip install --python ~/projects/YOUR_PROJECT/.venv/bin/python torch torchvision
-```
+> **Note:** When called from the Windows script, these values are passed automatically
+> via config and the script runs in non-interactive mode.
 
----
+#### What the Script Automates
 
-## Client Setup
-
-### Mac SSH config
-Copy `mac-ssh-config-template` into `~/.ssh/config`, replacing:
-- `linuxuser` with your actual Linux username
-- `winuser` with your actual Windows username
-- `YOUR_TUNNEL_NAME` and `YOUR_DOMAIN` with your Cloudflare values
-
-### Mac sleep alias (`~/.zshrc`)
-```bash
-alias sleepnow="ssh win-ssh 'powershell -Command \"rundll32.exe powrprof.dll,SetSuspendState 0,1,0\"'"
-```
-
-### VSCode
-Copy `vscode-settings.json` into your project's `.vscode/` folder.
-
-### Solveit CRAFT
-Copy `CRAFT-template.py` into your solveit project folder and update
-the `USER CONFIG` section with your actual values.
-
----
-
-## Daily Usage
-
-| Task | Command |
+| Step | Description |
 |---|---|
-| Connect from terminal | `ssh wsl-gpu` |
-| Connect from VSCode | Remote SSH → wsl-gpu |
-| List running kernels | `kernel-manager.sh list` |
-| Add a new kernel | `kernel-manager.sh create <name>` |
-| Remove a kernel | `kernel-manager.sh delete <name>` |
-| Sleep the PC (terminal) | `sleepnow` |
-| Sleep the PC (Solveit) | `sleepnow()` |
+| SSH server | Configured on port 2222 with public key auth only (password auth disabled) |
+| Firewall | UFW rules for SSH ports (standalone only; skipped in WSL) |
+| Sleep/suspend | Disabled for always-on GPU server (standalone only; handled by Windows host in WSL) |
+| Python venv | Created with uv, includes ML packages (torch, torchvision, torchaudio, numpy, pandas, scipy, scikit-learn, matplotlib, plotly, pillow, tqdm, httpx, requests) |
+| Cloudflare tunnel | Created, DNS routed, and runs as a systemd service |
+| Cloudflared symlink | Created at `~/.local/bin/cloudflared` for client compatibility |
+| Kernel manager | Installed with daily cleanup timer (10pm) |
+| Client config | Written to `~/.config/gpu-dev/client-config.json` |
 
----
+#### WSL Mode Differences
 
-## Kernel Management
+When running in WSL, the script additionally:
+- Creates a DNS route and ingress rule for Windows SSH access (`CF_HOSTNAME_WIN`)
+- Skips UFW firewall configuration (handled by Windows)
+- Skips sleep/suspend configuration (handled by Windows host)
 
-Each user gets their own named persistent kernel with dedicated ports.
-Kernels survive disconnections and reboots — resume exactly where you
-left off. Kernels are automatically cleaned up at 10pm if inactive for
-24 hours with no active SSH sessions.
+#### Post-Install: Customizing Packages
 
----
+The default venv includes common ML/data science packages. To add more:
 
-## Security
+```bash
+uv pip install --python ~/gpu-dev-projects/YOUR_PROJECT/.venv/bin/python <package>
+```
+| Sleepnow alias | Adds `sleepnow` command to PowerShell profile for manual sleep |
 
-- Password authentication disabled on all SSH connections
-- Public key authentication only
-- All connections encrypted end-to-end via Cloudflare tunnels
-- No open ports required on your router or firewall
