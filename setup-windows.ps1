@@ -86,6 +86,7 @@ if (Test-Path $LOCAL_CLIENT_CONFIG_FILE) {
     $CF_TUNNEL        = $saved.cf_tunnel
     $VENV_NAME        = $saved.venv_name
     $KERNEL_CLIENT_NAME = $saved.kernel_client_name
+    $PYTHON_VERSION   = $saved.python_version          # <-- ADDED
 }
 
 # Only prompt for values we don't already have
@@ -107,6 +108,7 @@ if (-not $SSH_PUBLIC_KEY) { $SSH_PUBLIC_KEY = Read-Host "SSH public key" }
 if (-not $CF_DOMAIN) { $CF_DOMAIN = Read-Host "Cloudflare domain (e.g. mydomain.com)" }
 if (-not $CF_TUNNEL) { $CF_TUNNEL = Read-Host "Tunnel name (e.g. gpu-dev)" }
 if (-not $VENV_NAME) { $VENV_NAME = Read-HostDefault "Project name" "myproject" }
+if (-not $PYTHON_VERSION) { $PYTHON_VERSION = Read-HostDefault "Python version" "3.12" }  # <-- ADDED
 $SETUP_LINUX = "https://raw.githubusercontent.com/rleyvasal/gpu-dev-setup/main/setup-linux.sh"
 
 $KERNEL_CLIENT_NAME = Get-SafeName "$COMPUTER_NAME-$WINDOWS_USER"
@@ -124,6 +126,7 @@ if (-not (Test-Path $LOCAL_CLIENT_CONFIG_DIR)) {
     venv_name          = $VENV_NAME
     kernel_client_name = $KERNEL_CLIENT_NAME
     windows_user       = $WINDOWS_USER
+    python_version     = $PYTHON_VERSION              # <-- ADDED
 } | ConvertTo-Json | Set-Content $LOCAL_CLIENT_CONFIG_FILE
 
 Write-Host ""
@@ -143,7 +146,6 @@ Run-Step "Step 1: Install WSL + distro" {
     }
 
     if (-not $distroInstalled) {
-        # Ensure required Windows features are enabled
         $features = @("VirtualMachinePlatform", "Microsoft-Windows-Subsystem-Linux")
         foreach ($feat in $features) {
             try {
@@ -171,7 +173,6 @@ if (-not $WSL_USER) {
     Pause; exit 1
 }
 
-# Construct paths now that we know the Linux user
 $KERNEL_WORK_DIR = "/home/$WSL_USER/gpu-dev-projects/$VENV_NAME"
 $VENV_PATH = "$KERNEL_WORK_DIR/.venv"
 
@@ -192,13 +193,10 @@ Run-Step "Step 2: Install and configure OpenSSH" {
         Write-Host "OpenSSH already installed, skipping." -ForegroundColor Green
     }
 
-    # Disable Windows Hello passwordless requirement (interferes with SSH key auth)
     Set-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\PasswordLess\Device" -Name "DevicePasswordLessBuildVersion" -Value 0
 
-    # Generate host keys if missing
     ssh-keygen -A
 
-    # Write sshd config explicitly
     $sshdConfig = "C:\ProgramData\ssh\sshd_config"
     $requiredSettings = @"
 PubkeyAuthentication yes
@@ -280,7 +278,6 @@ Run-Step "Step 5c: Add sleepnow alias" {
     }
 }
 
-
 Run-Step "Step 6: WSL startup scheduled task" {
     $action = New-ScheduledTaskAction -Execute "wsl.exe" -Argument "-d $WSL_DISTRO"
     $t1 = New-ScheduledTaskTrigger -AtStartup
@@ -307,6 +304,7 @@ Run-Step "Step 7: Write Linux config.json" {
         kernel_work_dir    = $KERNEL_WORK_DIR
         windows_user       = $WINDOWS_USER
         wsl_distro         = $WSL_DISTRO
+        python_version     = $PYTHON_VERSION           # <-- ADDED
     }
 
     $linuxConfigJson = $linuxConfigObject | ConvertTo-Json -Compress
@@ -344,6 +342,7 @@ Run-Step "Step 8: Write local client config" {
     $existing["kernel_work_dir"]    = $KERNEL_WORK_DIR
     $existing["ssh_key_path"]       = (Join-Path $WINDOWS_HOME ".ssh\id_ed25519")
     $existing["source_platform"]    = "windows-wsl"
+    $existing["python_version"]     = $PYTHON_VERSION  # <-- ADDED
 
     if (-not (Test-Path $LOCAL_CLIENT_CONFIG_DIR)) {
         New-Item -ItemType Directory -Path $LOCAL_CLIENT_CONFIG_DIR -Force | Out-Null
@@ -352,6 +351,7 @@ Run-Step "Step 8: Write local client config" {
     $existing | ConvertTo-Json -Depth 4 | Set-Content $LOCAL_CLIENT_CONFIG_FILE
     Write-Host "Local client config written to $LOCAL_CLIENT_CONFIG_FILE" -ForegroundColor Green
 }
+
 Run-Step "Step 9: Run Linux setup" {
     wsl -d $WSL_DISTRO -u $WSL_USER -- bash -lc @"
 curl -fsSL '$SETUP_LINUX' -o /tmp/setup-linux.sh
@@ -359,7 +359,6 @@ NON_INTERACTIVE=true bash /tmp/setup-linux.sh
 "@
 }
 
-# Check if tunnel was created by looking for it in cloudflared tunnel list
 $tunnelCheck = wsl -d $WSL_DISTRO -u $WSL_USER -- bash -lc "cloudflared tunnel list 2>/dev/null | grep -q '$CF_TUNNEL' && echo 'TUNNEL_OK' || echo 'TUNNEL_MISSING'"
 
 if ($tunnelCheck -notlike "*TUNNEL_OK*") {

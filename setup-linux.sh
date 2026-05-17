@@ -109,8 +109,10 @@ if [ -f "$CONFIG_FILE" ]; then
     KERNEL_CLIENT_NAME="${KERNEL_CLIENT_NAME:-$(read_config_value kernel_client_name)}"
     KERNEL_WORK_DIR="${KERNEL_WORK_DIR:-$(read_config_value kernel_work_dir)}"
     WINDOWS_USER="${WINDOWS_USER:-$(read_config_value windows_user)}"
+    PYTHON_VERSION="${PYTHON_VERSION:-$(read_config_value python_version)}"
 fi
 
+PYTHON_VERSION="${PYTHON_VERSION:-3.12}"
 LINUX_USER="${LINUX_USER:-$(whoami)}"
 SSH_PORT="${SSH_PORT:-2222}"
 KERNEL_WORK_DIR="${KERNEL_WORK_DIR:-$HOME/gpu-dev-projects}"
@@ -120,6 +122,9 @@ if [ "${NON_INTERACTIVE:-}" != "true" ]; then
     [ -z "${SSH_PUBLIC_KEY:-}" ] && read -r -p "SSH public key: " SSH_PUBLIC_KEY
     [ -z "${CF_DOMAIN:-}" ] && read -r -p "Cloudflare domain (e.g. mydomain.com): " CF_DOMAIN
     [ -z "${CF_TUNNEL:-}" ] && read -r -p "Tunnel name (e.g. gpu-dev): " CF_TUNNEL
+    read -r -p "Python version [$PYTHON_VERSION]: " _PV
+    PYTHON_VERSION="${_PV:-$PYTHON_VERSION}"
+
     if [ -z "${VENV_PATH:-}" ]; then
         read -r -p "Project name [myproject]: " VENV_NAME
         VENV_NAME="${VENV_NAME:-myproject}"
@@ -220,20 +225,21 @@ if ! command_exists uv; then
     export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$HOME/bin:$PATH"
 fi
 
-# Always ensure project is initialized first (handles migration from old setups)
 if [ ! -f "$(dirname "$VENV_PATH")/pyproject.toml" ]; then
     (cd "$(dirname "$VENV_PATH")" && uv init --name "$(basename "$(dirname "$VENV_PATH")")")
 fi
+(cd "$(dirname "$VENV_PATH")" && uv python pin "$PYTHON_VERSION")
 
 if [ ! -d "$VENV_PATH" ]; then
     mkdir -p "$(dirname "$VENV_PATH")"
     uv venv "$VENV_PATH" --project "$(dirname "$VENV_PATH")"
-    (cd "$(dirname "$VENV_PATH")" && uv add --python "$VENV_PYTHON" ipykernel jupyter_client torch torchvision torchaudio numpy pandas scipy scikit-learn matplotlib plotly pillow tqdm httpx requests)
+    (cd "$(dirname "$VENV_PATH")" && uv add ipykernel jupyter_client torch torchvision torchaudio numpy pandas scipy scikit-learn matplotlib plotly pillow tqdm httpx requests)
     echo "Venv created at $VENV_PATH"
 else
     echo "Venv exists at $VENV_PATH, skipping creation"
-    (cd "$(dirname "$VENV_PATH")" && uv add --python "$VENV_PYTHON" ipykernel jupyter_client torch torchvision torchaudio numpy pandas scipy scikit-learn matplotlib plotly pillow tqdm httpx requests)
+    (cd "$(dirname "$VENV_PATH")" && uv add ipykernel jupyter_client torch torchvision torchaudio numpy pandas scipy scikit-learn matplotlib plotly pillow tqdm httpx requests)
 fi
+
 
 step "Step 7: Install kernel-manager.sh"
 curl -fsSL "$KERNEL_MANAGER_URL" -o "$HOME/bin/kernel-manager.sh"
