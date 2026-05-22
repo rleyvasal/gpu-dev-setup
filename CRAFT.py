@@ -269,26 +269,20 @@ class GPUExecutionManager:
         if "text/plain" in data:
             print(data["text/plain"])
 
-    # def execute_gpu(self, code, verbose=False):
-    #     self._progress_handle = None
-
-    #     if self.remote_kc is None:
-    #         raise RuntimeError("GPU kernel not connected. Run %gpu first.")
-    #     result = self.remote_kc.execute_interactive(code=code, output_hook=self._output_hook)
-    #     self.remote_kc.last_result = result
-    #     if verbose:
-    #         return result
-
-    def execute_gpu(self, code, verbose=False): # reconnect, detects a dead connection and automatically calls setup_gpu()
+    def execute_gpu(self, code, verbose=False):
         self._progress_handle = None
         if self.remote_kc is None:
             raise RuntimeError("GPU kernel not connected. Run %gpu first.")
         try:
-            result = self.remote_kc.execute_interactive(code=code, output_hook=self._output_hook)
-        except Exception as e:
-            print(f"⚡ Connection lost ({type(e).__name__}), reconnecting...")
-            self.setup_gpu()
-            result = self.remote_kc.execute_interactive(code=code, output_hook=self._output_hook)
+            result = self.remote_kc.execute_interactive(
+                code=code, output_hook=self._output_hook
+            )
+        except KeyboardInterrupt:
+            print("⚡ Interrupted locally, stopping remote job...")
+            msg = self.remote_kc.session.msg("interrupt_request")
+            self.remote_kc.control_channel.send(msg)
+            print("✓ Remote job interrupted")
+            raise
         self.remote_kc.last_result = result
         if verbose:
             return result
