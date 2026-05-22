@@ -233,11 +233,11 @@ fi
 if [ ! -d "$VENV_PATH" ]; then
     mkdir -p "$(dirname "$VENV_PATH")"
     uv venv "$VENV_PATH" --project "$(dirname "$VENV_PATH")"
-    (cd "$(dirname "$VENV_PATH")" && uv add ipykernel jupyter_client torch torchvision torchaudio numpy pandas scipy scikit-learn matplotlib plotly pillow tqdm httpx requests)
+    (cd "$(dirname "$VENV_PATH")" && uv add ipykernel jupyter_client torch torchvision torchaudio numpy numba pandas scipy scikit-learn matplotlib plotly pillow tqdm httpx requests)
     echo "Venv created at $VENV_PATH"
 else
     echo "Venv exists at $VENV_PATH, skipping creation"
-    (cd "$(dirname "$VENV_PATH")" && uv add ipykernel jupyter_client torch torchvision torchaudio numpy pandas scipy scikit-learn matplotlib plotly pillow tqdm httpx requests)
+    (cd "$(dirname "$VENV_PATH")" && uv add ipykernel jupyter_client torch torchvision torchaudio numpy numba pandas scipy scikit-learn matplotlib plotly pillow tqdm httpx requests)
 fi
 
 
