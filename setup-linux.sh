@@ -264,6 +264,12 @@ step "Step 7: Install kernel-manager.sh"
 curl -fsSL "$KERNEL_MANAGER_URL" -o "$HOME/bin/kernel-manager.sh"
 chmod +x "$HOME/bin/kernel-manager.sh"
 
+step "Step 7b: Install add-client.sh"
+ADD_CLIENT_URL="https://raw.githubusercontent.com/rleyvasal/gpu-dev-setup/main/add-client.sh"
+curl -fsSL "$ADD_CLIENT_URL" -o "$HOME/bin/add-client.sh"
+chmod +x "$HOME/bin/add-client.sh"
+
+
 step "Step 8: Install kernel cleanup timer"
 if systemd_usable; then
     sudo tee /etc/systemd/system/kernel-cleanup.service > /dev/null <<EOF
