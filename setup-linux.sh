@@ -63,8 +63,24 @@ import_windows_config() {
         if [ -f "$win_config" ]; then
             WINDOWS_USER=$(grep '"windows_user"' "$win_config" | head -1 | cut -d'"' -f4)
             KERNEL_CLIENT_NAME=$(grep '"kernel_client_name"' "$win_config" | head -1 | cut -d'"' -f4)
+            WINDOWS_SSH_PORT=$(grep '"windows_ssh_port"' "$win_config" | head -1 | cut -d'"' -f4)
+            IDENTITY_FILE=$(grep '"identity_file"' "$win_config" | head -1 | cut -d'"' -f4)
+            CF_DOMAIN=$(grep '"cf_domain"' "$win_config" | head -1 | cut -d'"' -f4)
+            CF_TUNNEL=$(grep '"cf_tunnel"' "$win_config" | head -1 | cut -d'"' -f4)
+            CF_HOSTNAME_LINUX=$(grep '"cf_hostname_linux"' "$win_config" | head -1 | cut -d'"' -f4)
+            CF_HOSTNAME_WIN=$(grep '"cf_hostname_win"' "$win_config" | head -1 | cut -d'"' -f4)
+            VENV_PATH=$(grep '"venv_path"' "$win_config" | head -1 | cut -d'"' -f4)
+            KERNEL_WORK_DIR=$(grep '"kernel_work_dir"' "$win_config" | head -1 | cut -d'"' -f4)
             echo "WINDOWS_USER=$WINDOWS_USER"
             echo "KERNEL_CLIENT_NAME=$KERNEL_CLIENT_NAME"
+            echo "WINDOWS_SSH_PORT=$WINDOWS_SSH_PORT"
+            echo "IDENTITY_FILE=$IDENTITY_FILE"
+            echo "CF_DOMAIN=$CF_DOMAIN"
+            echo "CF_TUNNEL=$CF_TUNNEL"
+            echo "CF_HOSTNAME_LINUX=$CF_HOSTNAME_LINUX"
+            echo "CF_HOSTNAME_WIN=$CF_HOSTNAME_WIN"
+            echo "VENV_PATH=$VENV_PATH"
+            echo "KERNEL_WORK_DIR=$KERNEL_WORK_DIR"
             return 0
         fi
     done
@@ -73,15 +89,11 @@ import_windows_config() {
 
 write_client_config() {
     mkdir -p "$(dirname "$CLIENT_CONFIG_FILE")"
-    
-    # Import from Windows config if in WSL
-    if [ "$IS_WSL" = true ]; then
-        eval "$(import_windows_config)" 2>/dev/null || true
-    fi
- 
+
     LINUX_USER_VALUE="$LINUX_USER" \
     WINDOWS_USER_VALUE="${WINDOWS_USER:-}" \
-    SSH_PORT_VALUE="$SSH_PORT" \
+    LINUX_SSH_PORT_VALUE="$LINUX_SSH_PORT" \
+    WINDOWS_SSH_PORT_VALUE="$WINDOWS_SSH_PORT" \
     CF_DOMAIN_VALUE="$CF_DOMAIN" \
     CF_TUNNEL_VALUE="$CF_TUNNEL" \
     CF_HOSTNAME_LINUX_VALUE="$CF_HOSTNAME_LINUX" \
@@ -90,6 +102,7 @@ write_client_config() {
     KERNEL_CLIENT_NAME_VALUE="${KERNEL_CLIENT_NAME:-}" \
     KERNEL_WORK_DIR_VALUE="$KERNEL_WORK_DIR" \
     IS_WSL_VALUE="$IS_WSL" \
+    IDENTITY_FILE_VALUE="$IDENTITY_FILE" \
     python3 - "$CLIENT_CONFIG_FILE" <<'PY'
 import json, os, pathlib, sys
 
@@ -97,7 +110,8 @@ path = pathlib.Path(sys.argv[1])
 data = {
     "linux_user": os.environ["LINUX_USER_VALUE"],
     "windows_user": os.environ.get("WINDOWS_USER_VALUE") or os.environ.get("WINDOWS_USER", ""),
-    "ssh_port": int(os.environ["SSH_PORT_VALUE"]),
+    "linux_ssh_port": int(os.environ["LINUX_SSH_PORT_VALUE"]),
+    "windows_ssh_port": int(os.environ["WINDOWS_SSH_PORT_VALUE"]),
     "cf_domain": os.environ["CF_DOMAIN_VALUE"],
     "cf_tunnel": os.environ["CF_TUNNEL_VALUE"],
     "cf_hostname_linux": os.environ["CF_HOSTNAME_LINUX_VALUE"],
@@ -107,18 +121,31 @@ data = {
     "kernel_work_dir": os.environ["KERNEL_WORK_DIR_VALUE"],
     "ssh_key_path": os.path.expanduser("~/.ssh/id_ed25519"),
     "source_platform": "linux-native" if os.environ["IS_WSL_VALUE"] == "false" else "linux-wsl",
+    "identity_file": os.environ.get("IDENTITY_FILE_VALUE", "~/.ssh/id_ed25519_gpu_dev_solveit"),
+    "_identity_note": "Windows: %USERPROFILE%\\.ssh\\id_ed25519_gpu_dev_solveit, Mac: ~/.ssh/id_ed25519_gpu_dev_solveit",
 }
 path.write_text(json.dumps(data, indent=2), encoding="utf-8")
 PY
     chmod 600 "$CLIENT_CONFIG_FILE"
 }
 
+# Detect WSL early so we can import Windows config
+if grep -qi microsoft /proc/version 2>/dev/null; then
+    IS_WSL=true
+    echo "Running in WSL mode"
+    eval "$(import_windows_config)" 2>/dev/null || true
+else
+    IS_WSL=false
+    echo "Running in native Linux mode"
+fi
+
 # Load config from file if it exists (written by Windows setup or a previous run)
 if [ -f "$CONFIG_FILE" ]; then
     echo "Loading config from $CONFIG_FILE"
 
     LINUX_USER="${LINUX_USER:-$(read_config_value linux_user)}"
-    SSH_PORT="${SSH_PORT:-$(read_config_value ssh_port)}"
+    LINUX_SSH_PORT="${LINUX_SSH_PORT:-$(read_config_value ssh_port)}"
+    WINDOWS_SSH_PORT="${WINDOWS_SSH_PORT:-$(read_config_value windows_ssh_port)}"
     SSH_PUBLIC_KEY="${SSH_PUBLIC_KEY:-$(read_config_value ssh_public_key)}"
     CF_DOMAIN="${CF_DOMAIN:-$(read_config_value cf_domain)}"
     CF_TUNNEL="${CF_TUNNEL:-$(read_config_value cf_tunnel)}"
@@ -129,18 +156,44 @@ if [ -f "$CONFIG_FILE" ]; then
     KERNEL_WORK_DIR="${KERNEL_WORK_DIR:-$(read_config_value kernel_work_dir)}"
     WINDOWS_USER="${WINDOWS_USER:-$(read_config_value windows_user)}"
     PYTHON_VERSION="${PYTHON_VERSION:-$(read_config_value python_version)}"
+    IDENTITY_FILE="${IDENTITY_FILE:-$(read_config_value identity_file)}"
 fi
 
 PYTHON_VERSION="${PYTHON_VERSION:-3.12}"
 LINUX_USER="${LINUX_USER:-$(whoami)}"
-SSH_PORT="${SSH_PORT:-2222}"
+LINUX_SSH_PORT="${LINUX_SSH_PORT:-2222}"
+WINDOWS_SSH_PORT="${WINDOWS_SSH_PORT:-22}"
 KERNEL_WORK_DIR="${KERNEL_WORK_DIR:-$HOME/gpu-dev-projects}"
+IDENTITY_FILE="${IDENTITY_FILE:-~/.ssh/id_ed25519_gpu_dev_solveit}"
 
 # Only prompt interactively if not called from Windows setup
 if [ "${NON_INTERACTIVE:-}" != "true" ]; then
-    [ -z "${SSH_PUBLIC_KEY:-}" ] && read -r -p "SSH public key: " SSH_PUBLIC_KEY
-    [ -z "${CF_DOMAIN:-}" ] && read -r -p "Cloudflare domain (e.g. mydomain.com): " CF_DOMAIN
-    [ -z "${CF_TUNNEL:-}" ] && read -r -p "Tunnel name (e.g. gpu-dev): " CF_TUNNEL
+    [ -z "${SSH_PUBLIC_KEY:-}" ] && {
+        echo ""
+        echo "Paste your SSH public key (e.g. from ~/.ssh/id_ed25519.pub):"
+        read -r -p "SSH public key: " SSH_PUBLIC_KEY
+    }
+
+    echo ""
+    echo "SSH port for the Linux side:"
+    read -r -p "Linux SSH port [$LINUX_SSH_PORT]: " _LSP
+    LINUX_SSH_PORT="${_LSP:-$LINUX_SSH_PORT}"
+
+    echo "SSH port for the Windows side:"
+    read -r -p "Windows SSH port [$WINDOWS_SSH_PORT]: " _WSP
+    WINDOWS_SSH_PORT="${_WSP:-$WINDOWS_SSH_PORT}"
+
+    [ -z "${CF_DOMAIN:-}" ] && {
+        echo ""
+        echo "Your Cloudflare domain (e.g. example.com):"
+        read -r -p "Cloudflare domain: " CF_DOMAIN
+    }
+    [ -z "${CF_TUNNEL:-}" ] && {
+        echo ""
+        echo "Choose a name for your Cloudflare tunnel (any friendly name, e.g. gpu-dev):"
+        read -r -p "Tunnel name: " CF_TUNNEL
+    }
+
     read -r -p "Python version [$PYTHON_VERSION]: " _PV
     PYTHON_VERSION="${_PV:-$PYTHON_VERSION}"
 
@@ -150,6 +203,11 @@ if [ "${NON_INTERACTIVE:-}" != "true" ]; then
         KERNEL_WORK_DIR="$HOME/gpu-dev-projects/$VENV_NAME"
         VENV_PATH="$KERNEL_WORK_DIR/.venv"
     fi
+
+    echo ""
+    echo "Path to the SSH private key on the client machine (matching the public key above):"
+    read -r -p "Client identity file path [$IDENTITY_FILE]: " _IF
+    IDENTITY_FILE="${_IF:-$IDENTITY_FILE}"
 else
     [ -z "${SSH_PUBLIC_KEY:-}" ] && fail "SSH_PUBLIC_KEY is required but not set in config"
     [ -z "${CF_DOMAIN:-}" ] && fail "CF_DOMAIN is required but not set in config"
@@ -160,14 +218,6 @@ fi
 CF_HOSTNAME_LINUX="${CF_HOSTNAME_LINUX:-$LINUX_USER.$CF_DOMAIN}"
 CF_HOSTNAME_WIN="${CF_HOSTNAME_WIN:-${KERNEL_CLIENT_NAME:-$(hostname)}.$CF_DOMAIN}"
 VENV_PYTHON="$VENV_PATH/bin/python"
-
-if grep -qi microsoft /proc/version 2>/dev/null; then
-    IS_WSL=true
-    echo "Running in WSL mode"
-else
-    IS_WSL=false
-    echo "Running in native Linux mode"
-fi
 
 if [ "${NON_INTERACTIVE:-}" != "true" ]; then
     echo ""
@@ -190,8 +240,8 @@ else
     echo "Dependencies already installed, skipping."
 fi
 
-step "Step 2: Configure SSH on port $SSH_PORT"
-sudo sed -i -E "s/^#?Port [0-9]+/Port $SSH_PORT/" /etc/ssh/sshd_config
+step "Step 2: Configure SSH on port $LINUX_SSH_PORT"
+sudo sed -i -E "s/^#?Port [0-9]+/Port $LINUX_SSH_PORT/" /etc/ssh/sshd_config
 sudo sed -i -E "s/#?(PubkeyAuthentication).*/\1 yes/" /etc/ssh/sshd_config
 sudo sed -i -E "s/#?(PasswordAuthentication).*/\1 no/" /etc/ssh/sshd_config
 sudo mkdir -p /run/sshd
@@ -217,7 +267,7 @@ step "Step 4: Configure firewall"
 if [ "$IS_WSL" = true ]; then
     echo "Skipping Linux firewall configuration in WSL."
 else
-    sudo ufw allow "$SSH_PORT/tcp" comment "Linux SSH" || true
+    sudo ufw allow "$LINUX_SSH_PORT/tcp" comment "Linux SSH" || true
     sudo ufw allow "22/tcp" comment "OpenSSH" || true
     sudo ufw --force enable
 fi
@@ -229,7 +279,6 @@ if [ "$IS_WSL" = false ]; then
 else
     echo "WSL detected, skipping (handled by Windows host)"
 fi
-
 
 step "Step 5: Prepare paths and shell profile"
 mkdir -p "$KERNEL_WORK_DIR" "$HOME/bin"
@@ -259,7 +308,6 @@ else
     (cd "$(dirname "$VENV_PATH")" && uv add ipykernel jupyter_client torch torchvision torchaudio numpy numba pandas scipy scikit-learn matplotlib plotly pillow tqdm httpx requests)
 fi
 
-
 step "Step 7: Install kernel-manager.sh"
 curl -fsSL "$KERNEL_MANAGER_URL" -o "$HOME/bin/kernel-manager.sh"
 chmod +x "$HOME/bin/kernel-manager.sh"
@@ -268,7 +316,6 @@ step "Step 7b: Install add-client.sh"
 ADD_CLIENT_URL="https://raw.githubusercontent.com/rleyvasal/gpu-dev-setup/main/add-client.sh"
 curl -fsSL "$ADD_CLIENT_URL" -o "$HOME/bin/add-client.sh"
 chmod +x "$HOME/bin/add-client.sh"
-
 
 step "Step 8: Install kernel cleanup timer"
 if systemd_usable; then
@@ -359,7 +406,7 @@ if [ ! -f "$CONFIG_YML" ]; then
     if [ "$IS_WSL" = true ]; then
         WIN_IP="$(ip route | awk '/default/ {print $3; exit}')"
         EXTRA_INGRESS="  - hostname: $CF_HOSTNAME_WIN
-    service: tcp://$WIN_IP:22"
+    service: tcp://$WIN_IP:$WINDOWS_SSH_PORT"
     else
         EXTRA_INGRESS=""
     fi
@@ -370,7 +417,7 @@ credentials-file: $HOME/.cloudflared/$TUNNEL_ID.json
 
 ingress:
   - hostname: $CF_HOSTNAME_LINUX
-    service: tcp://localhost:$SSH_PORT
+    service: tcp://localhost:$LINUX_SSH_PORT
 $EXTRA_INGRESS
   - service: http_status:404
 EOF
@@ -453,8 +500,9 @@ echo "   Add to: ~/.ssh/config"
 echo ""
 echo "Host gpu-linux"
 echo "  HostName $CF_HOSTNAME_LINUX"
-echo "  Port $SSH_PORT"
+echo "  Port $LINUX_SSH_PORT"
 echo "  User $LINUX_USER"
+echo "  IdentityFile $IDENTITY_FILE"
 echo "  ProxyCommand ~/.local/bin/cloudflared access tcp --hostname $CF_HOSTNAME_LINUX"
 echo "  ControlMaster auto"
 echo "  ControlPath ~/.ssh/control-%r@%h:%p"
@@ -464,8 +512,9 @@ echo "  ServerAliveCountMax 10"
 echo ""
 echo "Host gpu-windows"
 echo "  HostName $CF_HOSTNAME_WIN"
-echo "  Port 22"
-echo "  User $WINDOWS_USER"
+echo "  Port $WINDOWS_SSH_PORT"
+echo "  User ${WINDOWS_USER:-$LINUX_USER}"
+echo "  IdentityFile $IDENTITY_FILE"
 echo "  ProxyCommand ~/.local/bin/cloudflared access tcp --hostname $CF_HOSTNAME_WIN"
 echo ""
 echo "========================================"
