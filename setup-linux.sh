@@ -96,14 +96,14 @@ import json, os, pathlib, sys
 path = pathlib.Path(sys.argv[1])
 data = {
     "linux_user": os.environ["LINUX_USER_VALUE"],
-    "windows_user": os.environ.get("WINDOWS_USER_VALUE", ""),
+    "windows_user": os.environ.get("WINDOWS_USER_VALUE") or os.environ.get("WINDOWS_USER", ""),
     "ssh_port": int(os.environ["SSH_PORT_VALUE"]),
     "cf_domain": os.environ["CF_DOMAIN_VALUE"],
     "cf_tunnel": os.environ["CF_TUNNEL_VALUE"],
     "cf_hostname_linux": os.environ["CF_HOSTNAME_LINUX_VALUE"],
     "cf_hostname_win": os.environ["CF_HOSTNAME_WIN_VALUE"],
     "venv_path": os.environ["VENV_PATH_VALUE"],
-    "kernel_client_name": os.environ.get("KERNEL_CLIENT_NAME_VALUE", ""),
+    "kernel_client_name": os.environ.get("KERNEL_CLIENT_NAME_VALUE") or os.environ.get("KERNEL_CLIENT_NAME", ""),
     "kernel_work_dir": os.environ["KERNEL_WORK_DIR_VALUE"],
     "ssh_key_path": os.path.expanduser("~/.ssh/id_ed25519"),
     "source_platform": "linux-native" if os.environ["IS_WSL_VALUE"] == "false" else "linux-wsl",
@@ -425,4 +425,42 @@ if [ "${SKIP_TUNNEL:-false}" = true ]; then
 fi
 
 . "$HOME/.bashrc" 2>/dev/null || true
+step "Final: Client configuration for copy-paste"
+
+echo ""
+echo "========================================"
+echo "  COPY-PASTE TO CLIENT MACHINES"
+echo "========================================"
+echo ""
+
+# Read the config we just created
+CLIENT_CFG=$(cat "$CLIENT_CONFIG_FILE")
+
+echo "1. FOR SOLVEIT / PYTHON CLIENTS:"
+echo "   Save as: ~/.config/gpu-dev/client-config.json"
+echo ""
+echo "$CLIENT_CFG"
+echo ""
+
+echo "2. FOR VS CODE SSH:"
+echo "   Add to: ~/.ssh/config"
+echo ""
+echo "Host gpu-linux"
+echo "  HostName $CF_HOSTNAME_LINUX"
+echo "  Port $SSH_PORT"
+echo "  User $LINUX_USER"
+echo "  ProxyCommand ~/.local/bin/cloudflared access tcp --hostname $CF_HOSTNAME_LINUX"
+echo "  ControlMaster auto"
+echo "  ControlPath ~/.ssh/control-%r@%h:%p"
+echo "  ControlPersist yes"
+echo "  ServerAliveInterval 60"
+echo "  ServerAliveCountMax 10"
+echo ""
+echo "Host gpu-windows"
+echo "  HostName $CF_HOSTNAME_WIN"
+echo "  Port 22"
+echo "  User $WINDOWS_USER"
+echo "  ProxyCommand ~/.local/bin/cloudflared access tcp --hostname $CF_HOSTNAME_WIN"
+echo ""
+echo "========================================"
 
