@@ -2,6 +2,7 @@
 # add-client.sh - Add new client's SSH public key and print client config
 
 KEY=$1
+DEFAULT_IDENTITY="~/.ssh/id_ed25519_gpu_dev_solveit"
 
 if [ -z "$KEY" ]; then
     echo "Usage: $0 '<ssh-public-key>'"
@@ -10,6 +11,12 @@ if [ -z "$KEY" ]; then
     echo "  $0 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAID... user@laptop'"
     exit 1
 fi
+
+echo ""
+echo "This is the path to your SSH private key on your local machine."
+echo "(The matching public key is the one you're adding above.)"
+read -p "Identity file path [$DEFAULT_IDENTITY]: " IDENTITY_FILE
+IDENTITY_FILE=${IDENTITY_FILE:-$DEFAULT_IDENTITY}
 
 HOME_DIR=${HOME}
 AUTH_KEYS="$HOME_DIR/.ssh/authorized_keys"
@@ -34,7 +41,7 @@ if [ -f "$CONFIG_FILE" ]; then
     echo "  NEW CLIENT CONFIGURATION"
     echo "========================================"
     echo ""
-    
+
     # Extract values from server config
     CF_DOMAIN=$(grep '"cf_domain"' "$CONFIG_FILE" | head -1 | cut -d'"' -f4)
     CF_TUNNEL=$(grep '"cf_tunnel"' "$CONFIG_FILE" | head -1 | cut -d'"' -f4)
@@ -46,7 +53,7 @@ if [ -f "$CONFIG_FILE" ]; then
     VENV_PATH=$(grep '"venv_path"' "$CONFIG_FILE" | head -1 | cut -d'"' -f4)
     KERNEL_CLIENT_NAME=$(grep '"kernel_client_name"' "$CONFIG_FILE" | head -1 | cut -d'"' -f4)
     KERNEL_WORK_DIR=$(grep '"kernel_work_dir"' "$CONFIG_FILE" | head -1 | cut -d'"' -f4)
-    
+
     echo "1. FOR SOLVEIT / PYTHON CLIENTS:"
     echo "   Save as: ~/.config/gpu-dev/client-config.json"
     echo ""
@@ -62,7 +69,7 @@ if [ -f "$CONFIG_FILE" ]; then
   },
   "client": {
     "_comment": "EDIT: Set paths for your local machine",
-    "identity_file": "~/.ssh/id_ed25519_gpu_dev_solveit",
+    "identity_file": "$IDENTITY_FILE",
     "_identity_note": "Windows: %USERPROFILE%\\\\.ssh\\\\id_ed25519_gpu_dev_solveit, Mac: ~/.ssh/id_ed25519_gpu_dev_solveit",
     "cloudflared_path": "~/.local/bin/cloudflared",
     "_cloudflared_note": "Windows: C:\\\\Program Files\\\\Cloudflare\\\\cloudflared.exe, Mac: /opt/homebrew/bin/cloudflared",
@@ -84,6 +91,7 @@ EOF
     echo "  HostName $CF_HOSTNAME_LINUX"
     echo "  Port $SSH_PORT"
     echo "  User $LINUX_USER"
+    echo "  IdentityFile $IDENTITY_FILE"
     echo "  ProxyCommand ~/.local/bin/cloudflared access tcp --hostname $CF_HOSTNAME_LINUX"
     echo "  ControlMaster auto"
     echo "  ControlPath ~/.ssh/control-%r@%h:%p"
@@ -95,6 +103,7 @@ EOF
     echo "  HostName $CF_HOSTNAME_WIN"
     echo "  Port 22"
     echo "  User $WINDOWS_USER"
+    echo "  IdentityFile $IDENTITY_FILE"
     echo "  ProxyCommand ~/.local/bin/cloudflared access tcp --hostname $CF_HOSTNAME_WIN"
     echo ""
     echo "========================================"

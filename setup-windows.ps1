@@ -79,14 +79,16 @@ $LOCAL_CLIENT_CONFIG_FILE = Join-Path $LOCAL_CLIENT_CONFIG_DIR "client-config.js
 # Load saved config if it exists
 if (Test-Path $LOCAL_CLIENT_CONFIG_FILE) {
     $saved = Get-Content $LOCAL_CLIENT_CONFIG_FILE | ConvertFrom-Json
-    $WSL_DISTRO       = $saved.wsl_distro
-    $SSH_PORT         = $saved.ssh_port
-    $SSH_PUBLIC_KEY   = $saved.ssh_public_key
-    $CF_DOMAIN        = $saved.cf_domain
-    $CF_TUNNEL        = $saved.cf_tunnel
-    $VENV_NAME        = $saved.venv_name
+    $WSL_DISTRO         = $saved.wsl_distro
+    $LINUX_SSH_PORT     = $saved.linux_ssh_port
+    $WINDOWS_SSH_PORT   = $saved.windows_ssh_port
+    $SSH_PUBLIC_KEY     = $saved.ssh_public_key
+    $IDENTITY_FILE      = $saved.identity_file
+    $CF_DOMAIN          = $saved.cf_domain
+    $CF_TUNNEL          = $saved.cf_tunnel
+    $VENV_NAME          = $saved.venv_name
     $KERNEL_CLIENT_NAME = $saved.kernel_client_name
-    $PYTHON_VERSION   = $saved.python_version          # <-- ADDED
+    $PYTHON_VERSION     = $saved.python_version
 }
 
 # Only prompt for values we don't already have
@@ -97,18 +99,46 @@ if (-not $WSL_DISTRO) {
         Write-Host "Detected WSL distro: $WSL_DISTRO" -ForegroundColor Green
     } elseif ($distros.Count -gt 1) {
         Write-Host "Detected WSL distros: $($distros -join ', ')" -ForegroundColor Yellow
+        Write-Host "Which Linux distribution in WSL should we configure?"
         $WSL_DISTRO = Read-HostDefault "WSL distro" $distros[0]
     } else {
+        Write-Host "Which Linux distribution in WSL should we install?"
         $WSL_DISTRO = Read-HostDefault "WSL distro" "Ubuntu"
     }
 }
 
-if (-not $SSH_PORT) { $SSH_PORT = Read-HostDefault "Linux SSH port" "2222" }
-if (-not $SSH_PUBLIC_KEY) { $SSH_PUBLIC_KEY = Read-Host "SSH public key" }
-if (-not $CF_DOMAIN) { $CF_DOMAIN = Read-Host "Cloudflare domain (e.g. mydomain.com)" }
-if (-not $CF_TUNNEL) { $CF_TUNNEL = Read-Host "Tunnel name (e.g. gpu-dev)" }
+if (-not $LINUX_SSH_PORT) {
+    Write-Host ""
+    Write-Host "SSH port for the Linux (WSL) side:"
+    $LINUX_SSH_PORT = Read-HostDefault "Linux SSH port" "2222"
+}
+if (-not $WINDOWS_SSH_PORT) {
+    Write-Host "SSH port for the Windows side:"
+    $WINDOWS_SSH_PORT = Read-HostDefault "Windows SSH port" "22"
+}
+if (-not $SSH_PUBLIC_KEY) {
+    Write-Host ""
+    Write-Host "Paste your SSH public key (e.g. from ~/.ssh/id_ed25519.pub):"
+    $SSH_PUBLIC_KEY = Read-Host "SSH public key"
+}
+if (-not $IDENTITY_FILE) {
+    Write-Host ""
+    Write-Host "Path to the SSH private key on the client machine (matching the public key above):"
+    $IDENTITY_FILE = Read-HostDefault "Identity file" "~/.ssh/id_ed25519_gpu_dev_solveit"
+}
+if (-not $CF_DOMAIN) {
+    Write-Host ""
+    Write-Host "Your Cloudflare domain (e.g. example.com):"
+    $CF_DOMAIN = Read-Host "Cloudflare domain"
+}
+if (-not $CF_TUNNEL) {
+    Write-Host ""
+    Write-Host "Choose a name for your Cloudflare tunnel (any friendly name, e.g. gpu-dev):"
+    $CF_TUNNEL = Read-Host "Tunnel name"
+}
 if (-not $VENV_NAME) { $VENV_NAME = Read-HostDefault "Project name" "myproject" }
-if (-not $PYTHON_VERSION) { $PYTHON_VERSION = Read-HostDefault "Python version" "3.12" }  # <-- ADDED
+if (-not $PYTHON_VERSION) { $PYTHON_VERSION = Read-HostDefault "Python version" "3.12" }
+
 $SETUP_LINUX = "https://raw.githubusercontent.com/rleyvasal/gpu-dev-setup/main/setup-linux.sh"
 
 $KERNEL_CLIENT_NAME = Get-SafeName "$COMPUTER_NAME-$WINDOWS_USER"
@@ -119,14 +149,16 @@ if (-not (Test-Path $LOCAL_CLIENT_CONFIG_DIR)) {
 }
 @{
     wsl_distro         = $WSL_DISTRO
-    ssh_port           = [int]$SSH_PORT
+    linux_ssh_port     = [int]$LINUX_SSH_PORT
+    windows_ssh_port   = [int]$WINDOWS_SSH_PORT
     ssh_public_key     = $SSH_PUBLIC_KEY
+    identity_file      = $IDENTITY_FILE
     cf_domain          = $CF_DOMAIN
     cf_tunnel          = $CF_TUNNEL
     venv_name          = $VENV_NAME
     kernel_client_name = $KERNEL_CLIENT_NAME
     windows_user       = $WINDOWS_USER
-    python_version     = $PYTHON_VERSION              # <-- ADDED
+    python_version     = $PYTHON_VERSION
 } | ConvertTo-Json | Set-Content $LOCAL_CLIENT_CONFIG_FILE
 
 Write-Host ""
@@ -199,6 +231,7 @@ Run-Step "Step 2: Install and configure OpenSSH" {
 
     $sshdConfig = "C:\ProgramData\ssh\sshd_config"
     $requiredSettings = @"
+Port $WINDOWS_SSH_PORT
 PubkeyAuthentication yes
 PasswordAuthentication no
 Match Group administrators
@@ -227,9 +260,9 @@ Run-Step "Step 3: Add SSH key" {
 
 Run-Step "Step 4: Firewall rules" {
     $rules = @(
-        @{ Name="OpenSSH Inbound"; Port=22; Remote="Any" },
-        @{ Name="Linux SSH Inbound $SSH_PORT"; Port=$SSH_PORT; Remote="Any" },
-        @{ Name="OpenSSH from WSL"; Port=22; Remote="172.16.0.0/12" }
+        @{ Name="OpenSSH Inbound"; Port=$WINDOWS_SSH_PORT; Remote="Any" },
+        @{ Name="Linux SSH Inbound $LINUX_SSH_PORT"; Port=$LINUX_SSH_PORT; Remote="Any" },
+        @{ Name="OpenSSH from WSL"; Port=$WINDOWS_SSH_PORT; Remote="172.16.0.0/12" }
     )
 
     foreach ($rule in $rules) {
@@ -292,8 +325,10 @@ Run-Step "Step 6: WSL startup scheduled task" {
 Run-Step "Step 7: Write Linux config.json" {
     $linuxConfigObject = @{
         linux_user         = $WSL_USER
-        ssh_port           = [int]$SSH_PORT
+        ssh_port           = [int]$LINUX_SSH_PORT
+        windows_ssh_port   = [int]$WINDOWS_SSH_PORT
         ssh_public_key     = $SSH_PUBLIC_KEY
+        identity_file      = $IDENTITY_FILE
         cf_domain          = $CF_DOMAIN
         cf_tunnel          = $CF_TUNNEL
         cf_hostname_linux  = $CF_HOSTNAME_LINUX
@@ -304,7 +339,7 @@ Run-Step "Step 7: Write Linux config.json" {
         kernel_work_dir    = $KERNEL_WORK_DIR
         windows_user       = $WINDOWS_USER
         wsl_distro         = $WSL_DISTRO
-        python_version     = $PYTHON_VERSION           # <-- ADDED
+        python_version     = $PYTHON_VERSION
     }
 
     $linuxConfigJson = $linuxConfigObject | ConvertTo-Json -Compress
@@ -331,7 +366,9 @@ Run-Step "Step 8: Write local client config" {
 
     $existing["linux_user"]         = $WSL_USER
     $existing["windows_user"]       = $WINDOWS_USER
-    $existing["ssh_port"]           = [int]$SSH_PORT
+    $existing["linux_ssh_port"]     = [int]$LINUX_SSH_PORT
+    $existing["windows_ssh_port"]   = [int]$WINDOWS_SSH_PORT
+    $existing["identity_file"]      = $IDENTITY_FILE
     $existing["cf_domain"]          = $CF_DOMAIN
     $existing["cf_tunnel"]          = $CF_TUNNEL
     $existing["cf_hostname_linux"]  = $CF_HOSTNAME_LINUX
@@ -342,7 +379,7 @@ Run-Step "Step 8: Write local client config" {
     $existing["kernel_work_dir"]    = $KERNEL_WORK_DIR
     $existing["ssh_key_path"]       = (Join-Path $WINDOWS_HOME ".ssh\id_ed25519")
     $existing["source_platform"]    = "windows-wsl"
-    $existing["python_version"]     = $PYTHON_VERSION  # <-- ADDED
+    $existing["python_version"]     = $PYTHON_VERSION
 
     if (-not (Test-Path $LOCAL_CLIENT_CONFIG_DIR)) {
         New-Item -ItemType Directory -Path $LOCAL_CLIENT_CONFIG_DIR -Force | Out-Null
