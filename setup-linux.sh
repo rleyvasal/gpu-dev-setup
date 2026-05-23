@@ -57,9 +57,28 @@ cloudflared_authenticated() {
     cloudflared tunnel list >/dev/null 2>&1
 }
 
+import_windows_config() {
+    for user_dir in /mnt/c/Users/*/; do
+        win_config="${user_dir}.config/gpu-dev/client-config.json"
+        if [ -f "$win_config" ]; then
+            WINDOWS_USER=$(grep '"windows_user"' "$win_config" | head -1 | cut -d'"' -f4)
+            KERNEL_CLIENT_NAME=$(grep '"kernel_client_name"' "$win_config" | head -1 | cut -d'"' -f4)
+            echo "WINDOWS_USER=$WINDOWS_USER"
+            echo "KERNEL_CLIENT_NAME=$KERNEL_CLIENT_NAME"
+            return 0
+        fi
+    done
+    return 1
+}
+
 write_client_config() {
     mkdir -p "$(dirname "$CLIENT_CONFIG_FILE")"
-
+    
+    # Import from Windows config if in WSL
+    if [ "$IS_WSL" = true ]; then
+        eval "$(import_windows_config)" 2>/dev/null || true
+    fi
+ 
     LINUX_USER_VALUE="$LINUX_USER" \
     WINDOWS_USER_VALUE="${WINDOWS_USER:-}" \
     SSH_PORT_VALUE="$SSH_PORT" \
